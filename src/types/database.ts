@@ -1,6 +1,6 @@
 export type ApplicationStatus = 'submitted' | 'under_review' | 'approved' | 'rejected' | 'waitlisted'
 export type BedStatus = 'available' | 'reserved' | 'occupied' | 'maintenance'
-export type ResidentStatus = 'active' | 'notice' | 'checked_out'
+export type ResidentStatus = 'active' | 'notice' | 'checked_out' | 'vacated'
 export type PaymentMode = 'cash' | 'UPI' | 'bank'
 export type DocumentKind = 'photo' | 'id_proof' | 'certificate' | 'other'
 export type StaffRole = 'admin' | 'staff' | 'store_staff'

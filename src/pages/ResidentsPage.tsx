@@ -18,12 +18,14 @@ const statusBadgeVariant: Record<ResidentStatus, 'success' | 'warning' | 'destru
   active: 'success',
   notice: 'warning',
   checked_out: 'destructive',
+  vacated: 'destructive',
 }
 
 const statusLabel: Record<ResidentStatus, string> = {
   active: 'Active',
   notice: 'Notice',
   checked_out: 'Checked Out',
+  vacated: 'Vacated',
 }
 
 export function ResidentsPage() {
@@ -34,7 +36,7 @@ export function ResidentsPage() {
 
   const tabFiltered = residents.filter((r) => {
     if (tab === 'active') return r.status === 'active' || r.status === 'notice'
-    if (tab === 'checked_out') return r.status === 'checked_out'
+    if (tab === 'checked_out') return r.status === 'checked_out' || r.status === 'vacated'
     return true
   })
 
