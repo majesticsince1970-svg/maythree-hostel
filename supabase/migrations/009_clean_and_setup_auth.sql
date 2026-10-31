@@ -8,3 +8,4 @@ UPDATE auth.users SET email_confirmed_at = now() WHERE email = 'staff@maythree.c
 INSERT INTO staff_profiles (user_id, name, role)
 SELECT id, 'Staff Admin', 'admin' FROM auth.users WHERE email = 'staff@maythree.com'
 ON CONFLICT (user_id) DO UPDATE SET role = 'admin';
+

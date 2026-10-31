@@ -65,9 +65,9 @@ export default function App() {
         <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><SettingsPage /></ProtectedRoute>} />
       </Route>
 
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to={user ? "/dashboard" : "/apply"} replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Default redirect - login page appears first */}
+      <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+      <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
     </Routes>
   )
 }

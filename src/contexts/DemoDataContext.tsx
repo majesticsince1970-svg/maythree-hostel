@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { supabase } from '@/lib/supabase'
 import type {
   Application, Bed, Room, RoomType, Flat, Resident, Payment,
   ExpenseCategory, Expense, CashAccount, CashTransaction,
@@ -8,6 +9,7 @@ import type {
 } from '@/types/database'
 
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
+const STORAGE_KEY = 'maythree_hostel_state_v6'
 
 // ── Room Types ──
 const initialRoomTypes: RoomType[] = [
@@ -41,7 +43,6 @@ function generateRoomsAndBeds(rts: RoomType[]) {
   // Floor 2: Twin sharing (201-219)
   for (let i = 201; i <= 219; i++) {
     const roomId = `room-${i}`
-    const hasAC = acRoomIds.has(roomId)
     rooms.push({ id: roomId, room_no: String(i), room_type_id: 'rt-1', flat_id: null, floor: 2, is_active: true, room_type: rts[0] })
     beds.push(
       { id: `bed-${i}-A`, room_id: roomId, bed_label: 'A', status: i % 3 === 0 ? 'occupied' : 'available' },
@@ -149,9 +150,9 @@ const initResidents: Resident[] = [
 
 // ── Payments ──
 const initPayments: Payment[] = [
-  { id: 'pay-1', resident_id: 'res-1', period_month: '2026-10', amount: 8000, paid_on: '2026-10-05', mode: 'UPI', reference: 'UPI123456', received_by: 'demo-staff-1', receipt_no: 'RCT-001' },
+  { id: 'pay-1', resident_id: 'res-1', period_month: '2026-10', amount: 8000, paid_on: '2026-10-05', mode: 'UPI', reference: 'UPI987213456', received_by: 'demo-staff-1', receipt_no: 'RCT-001' },
   { id: 'pay-2', resident_id: 'res-2', period_month: '2026-10', amount: 10000, paid_on: '2026-10-03', mode: 'cash', reference: null, received_by: 'demo-staff-1', receipt_no: 'RCT-002' },
-  { id: 'pay-3', resident_id: 'res-2', period_month: '2026-09', amount: 10000, paid_on: '2026-09-05', mode: 'bank', reference: 'NEFT789', received_by: 'demo-staff-1', receipt_no: 'RCT-003' },
+  { id: 'pay-3', resident_id: 'res-2', period_month: '2026-09', amount: 10000, paid_on: '2026-09-05', mode: 'bank', reference: 'NEFT491823', received_by: 'demo-staff-1', receipt_no: 'RCT-003' },
   { id: 'pay-4', resident_id: 'res-3', period_month: '2026-10', amount: 3500, paid_on: '2026-10-10', mode: 'cash', reference: null, received_by: 'demo-staff-1', receipt_no: 'RCT-004' },
 ]
 
@@ -185,15 +186,30 @@ const initExpenses: Expense[] = [
   { id: 'exp-4', expense_date: '2026-10-25', category_id: 'ec-3', vendor_id: null, description: 'Electricity bill - October', amount: 45000, paid_from: 'bank', bill_no: 'EB-OCT', bill_photo_path: null, recorded_by: 'demo-admin-1', status: 'approved', approved_by: 'demo-admin-1', category: demoExpenseCategories[2] },
 ]
 
-// ── Cash Accounts ──
+// ── Cash Accounts (All 5 Ledgers: Petty Cash, Store Counter, Rent Cash, Bank, UPI) ──
 const initCashAccounts: CashAccount[] = [
   { id: 'ca-1', name: 'Petty Cash', kind: 'petty_cash', float_limit: 50000, is_active: true, balance: 23500 },
   { id: 'ca-2', name: 'Store Counter', kind: 'store_counter', float_limit: 10000, is_active: true, balance: 4750 },
   { id: 'ca-3', name: 'Rent Cash', kind: 'rent_collection', float_limit: null, is_active: true, balance: 13500 },
+  { id: 'ca-4', name: 'Hostel Bank Account', kind: 'bank', float_limit: null, is_active: true, balance: 145000 },
+  { id: 'ca-5', name: 'Hostel UPI Account', kind: 'upi', float_limit: null, is_active: true, balance: 48000 },
 ]
 
-// ── Products ──
+// ── Initial Cash Transactions across all accounts ──
+const initCashTransactions: CashTransaction[] = [
+  { id: 'ct-init-1', account_id: 'ca-1', txn_date: '2026-10-29', direction: 'out', amount: 2500, source: 'expense', source_id: 'exp-1', note: 'Vegetables and fruits', recorded_by: 'demo-staff-1' },
+  { id: 'ct-init-2', account_id: 'ca-3', txn_date: '2026-10-29', direction: 'in', amount: 10000, source: 'rent_payment', source_id: 'pay-2', note: 'Rent payment RCT-002 (Cash) - Meera Iyer', recorded_by: 'demo-staff-1' },
+  { id: 'ct-init-3', account_id: 'ca-1', txn_date: '2026-10-28', direction: 'out', amount: 1200, source: 'expense', source_id: 'exp-2', note: 'Milk - 20 litres', recorded_by: 'demo-staff-1' },
+  { id: 'ct-init-4', account_id: 'ca-2', txn_date: '2026-10-28', direction: 'in', amount: 750, source: 'store_sale', source_id: 'sale-1', note: 'Store sale (Cash) - Snacks & essentials', recorded_by: 'demo-store-1' },
+  { id: 'ct-init-5', account_id: 'ca-5', txn_date: '2026-10-28', direction: 'in', amount: 500, source: 'store_sale', source_id: 'sale-2', note: 'Store sale (UPI) - Magic Tumbler order', recorded_by: 'demo-store-1' },
+  { id: 'ct-init-6', account_id: 'ca-5', txn_date: '2026-10-26', direction: 'in', amount: 8000, source: 'rent_payment', source_id: 'pay-1', note: 'Rent payment RCT-001 (UPI) - Kavya Nair', recorded_by: 'demo-staff-1' },
+  { id: 'ct-init-7', account_id: 'ca-4', txn_date: '2026-10-25', direction: 'out', amount: 45000, source: 'expense', source_id: 'exp-4', note: 'Electricity bill - October (Direct Bank Transfer)', recorded_by: 'demo-admin-1' },
+  { id: 'ct-init-8', account_id: 'ca-3', txn_date: '2026-10-24', direction: 'in', amount: 3500, source: 'rent_payment', source_id: 'pay-4', note: 'Rent payment RCT-004 (Cash partial) - Roshni Das', recorded_by: 'demo-staff-1' },
+]
+
+// ── Products (Including Magic Tumbler) ──
 const initProducts: Product[] = [
+  { id: 'prod-magic-tumbler', name: 'Magic Tumbler', category: 'Hostel Essentials', unit: 'piece', barcode: '8901234567899', cost_price: 180, selling_price: 250, reorder_level: 10, is_active: true, stock_on_hand: 25 },
   { id: 'prod-1', name: 'Maggi Noodles', category: 'Snacks', unit: 'packet', barcode: '8901234567890', cost_price: 12, selling_price: 15, reorder_level: 20, is_active: true, stock_on_hand: 45 },
   { id: 'prod-2', name: 'Lays Chips (Classic)', category: 'Snacks', unit: 'packet', barcode: '8901234567891', cost_price: 16, selling_price: 20, reorder_level: 15, is_active: true, stock_on_hand: 32 },
   { id: 'prod-3', name: 'Dove Soap', category: 'Toiletries', unit: 'piece', barcode: '8901234567892', cost_price: 45, selling_price: 55, reorder_level: 10, is_active: true, stock_on_hand: 18 },
@@ -204,12 +220,58 @@ const initProducts: Product[] = [
   { id: 'prod-8', name: 'Colgate Toothpaste', category: 'Toiletries', unit: 'tube', barcode: '8901234567897', cost_price: 60, selling_price: 75, reorder_level: 8, is_active: true, stock_on_hand: 12 },
 ]
 
+// ── Initial Store Sales (including Magic Tumbler order) ──
+const initSales: Sale[] = [
+  {
+    id: 'sale-init-1',
+    sale_date: '2026-10-28',
+    sold_by: 'demo-store-1',
+    resident_id: 'res-2',
+    payment_mode: 'UPI',
+    total: 500,
+    items: [
+      { id: 'si-init-1', sale_id: 'sale-init-1', product_id: 'prod-magic-tumbler', qty: 2, unit_price: 250, unit_cost: 180, product: initProducts[0] }
+    ]
+  },
+  {
+    id: 'sale-init-2',
+    sale_date: '2026-10-28',
+    sold_by: 'demo-store-1',
+    resident_id: null,
+    payment_mode: 'cash',
+    total: 75,
+    items: [
+      { id: 'si-init-2', sale_id: 'sale-init-2', product_id: 'prod-1', qty: 3, unit_price: 15, unit_cost: 12, product: initProducts[1] },
+      { id: 'si-init-3', sale_id: 'sale-init-2', product_id: 'prod-7', qty: 1, unit_price: 30, unit_cost: 25, product: initProducts[7] }
+    ]
+  }
+]
+
+// ── Initial Stock Movements ──
+const initStockMovements: StockMovement[] = [
+  { id: 'sm-init-1', product_id: 'prod-magic-tumbler', date: '2026-10-28', type: 'sale', qty: -2, ref_id: 'sale-init-1' },
+  { id: 'sm-init-2', product_id: 'prod-1', date: '2026-10-28', type: 'sale', qty: -3, ref_id: 'sale-init-2' },
+  { id: 'sm-init-3', product_id: 'prod-7', date: '2026-10-28', type: 'sale', qty: -1, ref_id: 'sale-init-2' },
+]
+
 // ── Staff ──
 const initStaff: StaffProfile[] = [
   { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@maythree.com' },
   { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@maythree.com' },
   { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@maythree.com' },
 ]
+
+// Helper to safely read from localStorage
+function getStoredState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch (err) {
+    console.warn('Could not parse stored state:', err)
+    return null
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────
 // Context interface — every action the app can perform
@@ -258,7 +320,7 @@ interface DemoDataContextType {
   // Store
   addProduct: (product: Omit<Product, 'id'>) => Product
   updateProduct: (id: string, changes: Partial<Product>) => void
-  recordSale: (items: { productId: string; qty: number; unitPrice: number }[], paymentMode: SalePaymentMode) => Sale
+  recordSale: (items: { productId: string; qty: number; unitPrice: number }[], paymentMode: SalePaymentMode, residentId?: string | null) => Sale
   recordPurchase: (vendorId: string | null, invoiceNo: string, paidFrom: string, items: { productId: string; qty: number; unitCost: number }[]) => StockPurchase
   recordStockAdjustment: (productId: string, countedQty: number, reason: string) => void
   recordDamageExpiry: (productId: string, qty: number, type: 'damage' | 'expiry', reason: string) => void
@@ -276,25 +338,162 @@ interface DemoDataContextType {
 const DemoDataContext = createContext<DemoDataContextType | undefined>(undefined)
 
 export function DemoDataProvider({ children }: { children: React.ReactNode }) {
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>(initialRoomTypes)
-  const [rooms, setRooms] = useState<Room[]>(initRooms)
-  const [beds, setBeds] = useState<Bed[]>(initBeds)
-  const [applications, setApplications] = useState<Application[]>(initApplications)
-  const [residents, setResidents] = useState<Resident[]>(initResidents)
-  const [payments, setPayments] = useState<Payment[]>(initPayments)
-  const [expenses, setExpenses] = useState<Expense[]>(initExpenses)
-  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>(initCashAccounts)
-  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([])
-  const [products, setProducts] = useState<Product[]>(initProducts)
-  const [sales, setSales] = useState<Sale[]>([])
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
-  const [stockPurchases, setStockPurchases] = useState<StockPurchase[]>([])
-  const [stockCounts, setStockCounts] = useState<StockCount[]>([])
-  const [staffList, setStaffList] = useState<StaffProfile[]>(initStaff)
-  const [acRoomsState, setAcRooms] = useState<Set<string>>(acRoomIds)
+  const stored = getStoredState()
+
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>(stored?.roomTypes || initialRoomTypes)
+  const [rooms, setRooms] = useState<Room[]>(stored?.rooms || initRooms)
+  const [beds, setBeds] = useState<Bed[]>(stored?.beds || initBeds)
+  const [applications, setApplications] = useState<Application[]>(stored?.applications || initApplications)
+  const [residents, setResidents] = useState<Resident[]>(stored?.residents || initResidents)
+  const [payments, setPayments] = useState<Payment[]>(stored?.payments || initPayments)
+  const [expenses, setExpenses] = useState<Expense[]>(stored?.expenses || initExpenses)
+  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>(stored?.cashAccounts || initCashAccounts)
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>(stored?.cashTransactions || initCashTransactions)
+  const [products, setProducts] = useState<Product[]>(stored?.products || initProducts)
+  const [sales, setSales] = useState<Sale[]>(stored?.sales || initSales)
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>(stored?.stockMovements || initStockMovements)
+  const [stockPurchases, setStockPurchases] = useState<StockPurchase[]>(stored?.stockPurchases || [])
+  const [stockCounts, setStockCounts] = useState<StockCount[]>(stored?.stockCounts || [])
+  const [staffList, setStaffList] = useState<StaffProfile[]>(stored?.staffList || initStaff)
+  const [acRoomsState, setAcRooms] = useState<Set<string>>(
+    stored?.acRooms ? new Set(stored.acRooms) : acRoomIds
+  )
   const [vendors] = useState<Vendor[]>(initVendors)
 
-  // ── Computed values (derived from state via useMemo) ──
+  // ── Sync to localStorage on every change ──
+  useEffect(() => {
+    try {
+      const stateToPersist = {
+        roomTypes,
+        rooms,
+        beds,
+        applications,
+        residents,
+        payments,
+        expenses,
+        cashAccounts,
+        cashTransactions,
+        products,
+        sales,
+        stockMovements,
+        stockPurchases,
+        stockCounts,
+        staffList,
+        acRooms: Array.from(acRoomsState),
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
+    } catch (err) {
+      console.warn('Failed to save to localStorage:', err)
+    }
+  }, [
+    roomTypes, rooms, beds, applications, residents, payments, expenses,
+    cashAccounts, cashTransactions, products, sales, stockMovements,
+    stockPurchases, stockCounts, staffList, acRoomsState
+  ])
+
+  // ── Listen for cross-tab updates ──
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const fresh = JSON.parse(e.newValue)
+          if (fresh.roomTypes) setRoomTypes(fresh.roomTypes)
+          if (fresh.rooms) setRooms(fresh.rooms)
+          if (fresh.beds) setBeds(fresh.beds)
+          if (fresh.applications) setApplications(fresh.applications)
+          if (fresh.residents) setResidents(fresh.residents)
+          if (fresh.payments) setPayments(fresh.payments)
+          if (fresh.expenses) setExpenses(fresh.expenses)
+          if (fresh.cashAccounts) setCashAccounts(fresh.cashAccounts)
+          if (fresh.cashTransactions) setCashTransactions(fresh.cashTransactions)
+          if (fresh.products) setProducts(fresh.products)
+          if (fresh.sales) setSales(fresh.sales)
+          if (fresh.stockMovements) setStockMovements(fresh.stockMovements)
+          if (fresh.stockPurchases) setStockPurchases(fresh.stockPurchases)
+          if (fresh.stockCounts) setStockCounts(fresh.stockCounts)
+          if (fresh.staffList) setStaffList(fresh.staffList)
+          if (fresh.acRooms) setAcRooms(new Set(fresh.acRooms))
+        } catch (err) {
+          console.warn('Cross-tab sync error:', err)
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
+  // ── Background Supabase Hydration ──
+  useEffect(() => {
+    if (DEMO_MODE) return
+
+    async function loadFromSupabase() {
+      try {
+        const [
+          { data: remoteApps },
+          { data: remoteResidents },
+          { data: remotePayments },
+          { data: remoteProducts },
+        ] = await Promise.all([
+          supabase.from('applications').select('*'),
+          supabase.from('residents').select('*, application:applications(*), bed:beds(*, room:rooms(*))'),
+          supabase.from('payments').select('*'),
+          supabase.from('products').select('*'),
+        ])
+
+        if (remoteProducts && remoteProducts.length > 0) {
+          const rps = remoteProducts as unknown as Product[]
+          setProducts(prev => {
+            const map = new Map(prev.map(p => [p.id, p]))
+            for (const rp of rps) {
+              const existing = map.get(rp.id)
+              map.set(rp.id, {
+                ...rp,
+                stock_on_hand: existing?.stock_on_hand ?? rp.reorder_level ?? 20
+              })
+            }
+            // Ensure Magic Tumbler is always present
+            if (!map.has('prod-magic-tumbler')) {
+              map.set('prod-magic-tumbler', initProducts[0])
+            }
+            return Array.from(map.values())
+          })
+        }
+
+        if (remoteApps && remoteApps.length > 0) {
+          const rApps = remoteApps as unknown as Application[]
+          setApplications(prev => {
+            const existingIds = new Set(prev.map(a => a.id))
+            const newOnes = rApps.filter(a => !existingIds.has(a.id))
+            return [...newOnes, ...prev]
+          })
+        }
+
+        if (remoteResidents && remoteResidents.length > 0) {
+          const rRes = remoteResidents as unknown as Resident[]
+          setResidents(prev => {
+            const existingIds = new Set(prev.map(r => r.id))
+            const newOnes = rRes.filter(r => !existingIds.has(r.id))
+            return [...prev, ...newOnes]
+          })
+        }
+
+        if (remotePayments && remotePayments.length > 0) {
+          const rPay = remotePayments as unknown as Payment[]
+          setPayments(prev => {
+            const existingIds = new Set(prev.map(p => p.id))
+            const newOnes = rPay.filter(p => !existingIds.has(p.id))
+            return [...prev, ...newOnes]
+          })
+        }
+      } catch (e) {
+        console.warn('Supabase background load warning (using local state):', e)
+      }
+    }
+
+    loadFromSupabase()
+  }, [])
+
+  // ── Computed values (derived dynamically via useMemo) ──
   const dashboardStats = useMemo<DashboardStats>(() => {
     const occupied = beds.filter(b => b.status === 'occupied').length
     const reserved = beds.filter(b => b.status === 'reserved').length
@@ -363,15 +562,28 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       reviewed_by: null,
       review_note: null,
     }
-    setApplications(prev => [...prev, newApp])
+    setApplications(prev => [newApp, ...prev])
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('applications').insert([newApp]).then(({ error }: any) => {
+        if (error) console.warn('Supabase application insert warning:', error.message)
+      })
+    }
+
     return newApp
   }, [applications.length])
 
   const updateApplicationStatus = useCallback((id: string, status: ApplicationStatus, note?: string) => {
     setApplications(prev => prev.map(a => a.id === id ? { ...a, status, review_note: note || a.review_note, reviewed_by: 'demo-staff-1' } : a))
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('applications').update({ status, review_note: note }).eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase application update warning:', error.message)
+      })
+    }
   }, [])
 
-  // ── Bed allocation ──
+  // ── Bed allocation (influences Bed, Resident, Application & Dashboard) ──
   const allocateBed = useCallback((applicationId: string, bedId: string, checkInDate: string, depositAmount: number) => {
     const app = applications.find(a => a.id === applicationId)
     if (!app) return
@@ -400,13 +612,19 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     setBeds(prev => prev.map(b => b.id === bedId ? { ...b, status: 'occupied' as BedStatus } : b))
 
     // Add resident
-    setResidents(prev => [...prev, newResident])
+    setResidents(prev => [newResident, ...prev])
 
     // Update application status
     setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: 'approved' as ApplicationStatus, review_note: 'Approved and bed allocated', reviewed_by: 'demo-staff-1' } : a))
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then()
+      (supabase as any).from('residents').insert([newResident]).then()
+      (supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then()
+    }
   }, [applications, beds, rooms, roomTypes])
 
-  // ── Checkout ──
+  // ── Checkout (frees Bed and moves Resident to Checked Out) ──
   const checkOutResident = useCallback((residentId: string, checkOutDate: string) => {
     const resident = residents.find(r => r.id === residentId)
     if (!resident) return
@@ -416,35 +634,64 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
     // Update resident
     setResidents(prev => prev.map(r => r.id === residentId ? { ...r, status: 'checked_out' as const, check_out_date: checkOutDate } : r))
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
+      (supabase as any).from('residents').update({ status: 'checked_out', check_out_date: checkOutDate }).eq('id', residentId).then()
+    }
   }, [residents])
 
   const updateBedStatus = useCallback((bedId: string, status: BedStatus) => {
     setBeds(prev => prev.map(b => b.id === bedId ? { ...b, status } : b))
+    if (!DEMO_MODE) {
+      (supabase as any).from('beds').update({ status }).eq('id', bedId).then()
+    }
   }, [])
 
-  // ── Payments ──
+  // ── Payments (influences Rent due, Rent Cash, UPI, Bank accounts & Reports) ──
   const addPayment = useCallback((payment: Omit<Payment, 'id' | 'receipt_no'>): Payment => {
     const newPayment: Payment = {
       ...payment,
       id: `pay-${Date.now()}`,
       receipt_no: `RCT-${String(payments.length + 1).padStart(3, '0')}`,
     }
-    setPayments(prev => [...prev, newPayment])
+    setPayments(prev => [newPayment, ...prev])
 
-    // If cash payment, update the relevant cash account
+    // Credit corresponding account based on payment mode
     if (payment.mode === 'cash') {
+      // Rent Cash Account
       setCashAccounts(prev => prev.map(a => a.id === 'ca-3' ? { ...a, balance: (a.balance || 0) + payment.amount } : a))
-      setCashTransactions(prev => [...prev, {
+      setCashTransactions(prev => [{
         id: `ct-${Date.now()}`, account_id: 'ca-3', txn_date: payment.paid_on,
         direction: 'in' as const, amount: payment.amount, source: 'rent_payment' as const,
-        source_id: newPayment.id, note: `Rent payment ${newPayment.receipt_no}`, recorded_by: payment.received_by
-      }])
+        source_id: newPayment.id, note: `Rent payment ${newPayment.receipt_no} (Cash)`, recorded_by: payment.received_by
+      }, ...prev])
+    } else if (payment.mode === 'UPI') {
+      // UPI Account
+      setCashAccounts(prev => prev.map(a => a.id === 'ca-5' ? { ...a, balance: (a.balance || 0) + payment.amount } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-5', txn_date: payment.paid_on,
+        direction: 'in' as const, amount: payment.amount, source: 'rent_payment' as const,
+        source_id: newPayment.id, note: `Rent payment ${newPayment.receipt_no} (UPI ${payment.reference || ''})`, recorded_by: payment.received_by
+      }, ...prev])
+    } else if (payment.mode === 'bank') {
+      // Bank Account
+      setCashAccounts(prev => prev.map(a => a.id === 'ca-4' ? { ...a, balance: (a.balance || 0) + payment.amount } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-4', txn_date: payment.paid_on,
+        direction: 'in' as const, amount: payment.amount, source: 'rent_payment' as const,
+        source_id: newPayment.id, note: `Rent payment ${newPayment.receipt_no} (Bank Transfer ${payment.reference || ''})`, recorded_by: payment.received_by
+      }, ...prev])
+    }
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('payments').insert([newPayment]).then()
     }
 
     return newPayment
   }, [payments.length])
 
-  // ── Expenses ──
+  // ── Expenses (influences Petty Cash / Bank & Operating Expenses on Reports) ──
   const addExpense = useCallback((expense: Omit<Expense, 'id' | 'status' | 'approved_by'>): Expense => {
     const newExpense: Expense = {
       ...expense,
@@ -452,16 +699,27 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       status: 'recorded',
       approved_by: null,
     }
-    setExpenses(prev => [...prev, newExpense])
+    setExpenses(prev => [newExpense, ...prev])
 
-    // Debit cash account if paid from petty cash
+    // Debit account based on paid_from
     if (expense.paid_from === 'petty_cash') {
       setCashAccounts(prev => prev.map(a => a.id === 'ca-1' ? { ...a, balance: (a.balance || 0) - expense.amount } : a))
-      setCashTransactions(prev => [...prev, {
+      setCashTransactions(prev => [{
         id: `ct-${Date.now()}`, account_id: 'ca-1', txn_date: expense.expense_date,
         direction: 'out' as const, amount: expense.amount, source: 'expense' as const,
         source_id: newExpense.id, note: expense.description, recorded_by: expense.recorded_by
-      }])
+      }, ...prev])
+    } else if (expense.paid_from === 'bank') {
+      setCashAccounts(prev => prev.map(a => a.id === 'ca-4' ? { ...a, balance: (a.balance || 0) - expense.amount } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-4', txn_date: expense.expense_date,
+        direction: 'out' as const, amount: expense.amount, source: 'expense' as const,
+        source_id: newExpense.id, note: expense.description, recorded_by: expense.recorded_by
+      }, ...prev])
+    }
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('expenses').insert([newExpense]).then()
     }
 
     return newExpense
@@ -469,32 +727,35 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
   const updateExpenseStatus = useCallback((id: string, status: 'approved' | 'rejected') => {
     setExpenses(prev => prev.map(e => e.id === id ? { ...e, status, approved_by: status === 'approved' ? 'demo-admin-1' : null } : e))
+    if (!DEMO_MODE) {
+      (supabase as any).from('expenses').update({ status }).eq('id', id).then()
+    }
   }, [])
 
-  // ── Cash ──
+  // ── Cash Top-up & Count ──
   const topUpCash = useCallback((accountId: string, amount: number, note?: string) => {
+    const target = cashAccounts.find(a => a.id === accountId)
     setCashAccounts(prev => prev.map(a => a.id === accountId ? { ...a, balance: (a.balance || 0) + amount } : a))
-    setCashTransactions(prev => [...prev, {
+    setCashTransactions(prev => [{
       id: `ct-${Date.now()}`, account_id: accountId, txn_date: new Date().toISOString().split('T')[0],
       direction: 'in' as const, amount, source: 'top_up' as const,
-      source_id: null, note: note || 'Cash top-up', recorded_by: 'demo-admin-1'
-    }])
-  }, [])
+      source_id: null, note: note || `Top-up for ${target?.name || 'Cash Account'}`, recorded_by: 'demo-admin-1'
+    }, ...prev])
+  }, [cashAccounts])
 
   const recordCashCount = useCallback((accountId: string, countedAmount: number, note?: string) => {
     const account = cashAccounts.find(a => a.id === accountId)
     const systemBalance = account?.balance || 0
     const difference = countedAmount - systemBalance
 
-    // Adjust balance to match count
     setCashAccounts(prev => prev.map(a => a.id === accountId ? { ...a, balance: countedAmount } : a))
 
     if (difference !== 0) {
-      setCashTransactions(prev => [...prev, {
+      setCashTransactions(prev => [{
         id: `ct-${Date.now()}`, account_id: accountId, txn_date: new Date().toISOString().split('T')[0],
         direction: difference > 0 ? 'in' as const : 'out' as const, amount: Math.abs(difference), source: 'adjustment' as const,
-        source_id: null, note: note || `Cash count adjustment: ${difference > 0 ? '+' : ''}${difference}`, recorded_by: 'demo-admin-1'
-      }])
+        source_id: null, note: note || `Cash count discrepancy: ${difference > 0 ? '+' : ''}${difference}`, recorded_by: 'demo-admin-1'
+      }, ...prev])
     }
   }, [cashAccounts])
 
@@ -502,15 +763,27 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const addProduct = useCallback((product: Omit<Product, 'id'>): Product => {
     const newProduct: Product = { ...product, id: `prod-${Date.now()}` }
     setProducts(prev => [...prev, newProduct])
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('products').insert([newProduct]).then()
+    }
+
     return newProduct
   }, [])
 
   const updateProduct = useCallback((id: string, changes: Partial<Product>) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...changes } : p))
+    if (!DEMO_MODE) {
+      (supabase as any).from('products').update(changes).eq('id', id).then()
+    }
   }, [])
 
-  // ── Store: Sales (POS checkout) ──
-  const recordSale = useCallback((items: { productId: string; qty: number; unitPrice: number }[], paymentMode: SalePaymentMode): Sale => {
+  // ── Store: Sales (Order / POS checkout - decrements stock, credits cash/UPI, links resident) ──
+  const recordSale = useCallback((
+    items: { productId: string; qty: number; unitPrice: number }[],
+    paymentMode: SalePaymentMode,
+    residentId?: string | null
+  ): Sale => {
     const saleId = `sale-${Date.now()}`
     const saleDate = new Date().toISOString().split('T')[0]
     const saleItems: SaleItem[] = items.map((item, i) => {
@@ -529,13 +802,18 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const total = saleItems.reduce((s, si) => s + si.unit_price * si.qty, 0)
 
     const sale: Sale = {
-      id: saleId, sale_date: saleDate, sold_by: 'demo-store-1',
-      resident_id: null, payment_mode: paymentMode, total, items: saleItems,
+      id: saleId,
+      sale_date: saleDate,
+      sold_by: 'demo-store-1',
+      resident_id: residentId || null,
+      payment_mode: paymentMode,
+      total,
+      items: saleItems,
     }
 
-    setSales(prev => [...prev, sale])
+    setSales(prev => [sale, ...prev])
 
-    // Reduce stock for each item
+    // Reduce stock for each item immediately
     setProducts(prev => prev.map(p => {
       const soldItem = items.find(i => i.productId === p.id)
       if (soldItem) {
@@ -553,22 +831,35 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       qty: -item.qty,
       ref_id: saleId,
     }))
-    setStockMovements(prev => [...prev, ...movements])
+    setStockMovements(prev => [...movements, ...prev])
 
-    // Credit cash account if cash payment
-    if (paymentMode === 'cash' || paymentMode === 'UPI') {
+    // Credit cash account if Cash or UPI
+    if (paymentMode === 'cash') {
+      // Store Counter Account
       setCashAccounts(prev => prev.map(a => a.id === 'ca-2' ? { ...a, balance: (a.balance || 0) + total } : a))
-      setCashTransactions(prev => [...prev, {
+      setCashTransactions(prev => [{
         id: `ct-${Date.now()}`, account_id: 'ca-2', txn_date: saleDate,
         direction: 'in' as const, amount: total, source: 'store_sale' as const,
-        source_id: saleId, note: `Store sale (${paymentMode})`, recorded_by: 'demo-store-1'
-      }])
+        source_id: saleId, note: `Store sale #${saleId.slice(-6)} (Cash)`, recorded_by: 'demo-store-1'
+      }, ...prev])
+    } else if (paymentMode === 'UPI') {
+      // UPI Account
+      setCashAccounts(prev => prev.map(a => a.id === 'ca-5' ? { ...a, balance: (a.balance || 0) + total } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-5', txn_date: saleDate,
+        direction: 'in' as const, amount: total, source: 'store_sale' as const,
+        source_id: saleId, note: `Store sale #${saleId.slice(-6)} (UPI)`, recorded_by: 'demo-store-1'
+      }, ...prev])
+    }
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('sales').insert([{ id: saleId, sale_date: saleDate, sold_by: '00000000-0000-0000-0000-000000000001', payment_mode: paymentMode, total }]).then()
     }
 
     return sale
   }, [products])
 
-  // ── Store: Purchases ──
+  // ── Store: Purchases (Increments stock, debits cash/bank) ──
   const recordPurchase = useCallback((vendorId: string | null, invoiceNo: string, paidFrom: string, items: { productId: string; qty: number; unitCost: number }[]): StockPurchase => {
     const purchaseId = `sp-${Date.now()}`
     const purchaseDate = new Date().toISOString().split('T')[0]
@@ -588,7 +879,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       vendor: initVendors.find(v => v.id === vendorId),
     }
 
-    setStockPurchases(prev => [...prev, purchase])
+    setStockPurchases(prev => [purchase, ...prev])
 
     // Increase stock
     setProducts(prev => prev.map(p => {
@@ -608,18 +899,30 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       qty: item.qty,
       ref_id: purchaseId,
     }))
-    setStockMovements(prev => [...prev, ...movements])
+    setStockMovements(prev => [...movements, ...prev])
 
-    // Debit cash if paid from petty_cash
+    // Debit account based on paidFrom
     const total = items.reduce((s, i) => s + i.qty * i.unitCost, 0)
     if (paidFrom === 'petty_cash') {
       setCashAccounts(prev => prev.map(a => a.id === 'ca-1' ? { ...a, balance: (a.balance || 0) - total } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-1', txn_date: purchaseDate,
+        direction: 'out' as const, amount: total, source: 'expense' as const,
+        source_id: purchaseId, note: `Stock purchase #${invoiceNo || purchaseId.slice(-6)}`, recorded_by: 'demo-admin-1'
+      }, ...prev])
+    } else if (paidFrom === 'bank') {
+      setCashAccounts(prev => prev.map(a => a.id === 'ca-4' ? { ...a, balance: (a.balance || 0) - total } : a))
+      setCashTransactions(prev => [{
+        id: `ct-${Date.now()}`, account_id: 'ca-4', txn_date: purchaseDate,
+        direction: 'out' as const, amount: total, source: 'expense' as const,
+        source_id: purchaseId, note: `Stock purchase #${invoiceNo || purchaseId.slice(-6)} (Bank)`, recorded_by: 'demo-admin-1'
+      }, ...prev])
     }
 
     return purchase
   }, [products])
 
-  // ── Store: Stock Adjustment (Physical Count) ──
+  // ── Store: Physical Count (Stock Adjustment) ──
   const recordStockAdjustment = useCallback((productId: string, countedQty: number, reason: string) => {
     const product = products.find(p => p.id === productId)
     if (!product) return
@@ -629,17 +932,17 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock_on_hand: countedQty } : p))
 
     if (difference !== 0) {
-      setStockMovements(prev => [...prev, {
+      setStockMovements(prev => [{
         id: `sm-${Date.now()}`,
         product_id: productId,
         date: new Date().toISOString().split('T')[0],
         type: 'adjustment' as StockMovementType,
         qty: difference,
         ref_id: null,
-      }])
+      }, ...prev])
     }
 
-    setStockCounts(prev => [...prev, {
+    setStockCounts(prev => [{
       id: `sc-${Date.now()}`,
       count_date: new Date().toISOString().split('T')[0],
       product_id: productId,
@@ -647,27 +950,26 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       system_qty: systemQty,
       difference,
       reason,
-    }])
+    }, ...prev])
   }, [products])
 
   // ── Store: Damage / Expiry ──
   const recordDamageExpiry = useCallback((productId: string, qty: number, type: 'damage' | 'expiry', reason: string) => {
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock_on_hand: Math.max(0, (p.stock_on_hand || 0) - qty) } : p))
 
-    setStockMovements(prev => [...prev, {
+    setStockMovements(prev => [{
       id: `sm-${Date.now()}`,
       product_id: productId,
       date: new Date().toISOString().split('T')[0],
       type: type as StockMovementType,
       qty: -qty,
       ref_id: null,
-    }])
+    }, ...prev])
   }, [])
 
   // ── Settings: Room Types ──
   const updateRoomType = useCallback((id: string, changes: Partial<RoomType>) => {
     setRoomTypes(prev => prev.map(rt => rt.id === id ? { ...rt, ...changes } : rt))
-    // Update embedded roomType in rooms
     setRooms(prev => prev.map(r => r.room_type_id === id ? { ...r, room_type: { ...r.room_type!, ...changes } } : r))
   }, [])
 
@@ -684,7 +986,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     setStaffList(prev => prev.filter(s => s.user_id !== userId))
   }, [])
 
-  // ── Settings: Room Config ──
+  // ── Settings: Room Config & Beds ──
   const updateRoomConfig = useCallback((roomId: string, changes: { room_type_id?: string }) => {
     setRooms(prev => prev.map(r => {
       if (r.id !== roomId) return r
@@ -708,7 +1010,6 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   }, [beds, rooms])
 
   const removeBedFromRoom = useCallback((bedId: string) => {
-    // Only allow removing available beds
     const bed = beds.find(b => b.id === bedId)
     if (!bed || bed.status === 'occupied') return
     setBeds(prev => prev.filter(b => b.id !== bedId))
@@ -773,7 +1074,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       removeStaff,
       updateRoomConfig,
       addBedToRoom,
-      removeBedFromRoom: removeBedFromRoom,
+      removeBedFromRoom,
       toggleRoomAC,
     }}>
       {children}

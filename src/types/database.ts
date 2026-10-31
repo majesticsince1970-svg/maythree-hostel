@@ -7,7 +7,7 @@ export type StaffRole = 'admin' | 'staff' | 'store_staff'
 export type ExpenseStatus = 'recorded' | 'approved' | 'rejected'
 export type CashDirection = 'in' | 'out'
 export type CashSource = 'opening' | 'top_up' | 'expense' | 'rent_payment' | 'store_sale' | 'transfer' | 'bank_deposit' | 'adjustment'
-export type CashAccountKind = 'petty_cash' | 'store_counter' | 'rent_collection'
+export type CashAccountKind = 'petty_cash' | 'store_counter' | 'rent_collection' | 'bank' | 'upi'
 export type StockMovementType = 'purchase' | 'sale' | 'return' | 'damage' | 'expiry' | 'adjustment'
 export type SalePaymentMode = 'cash' | 'UPI' | 'on_account'
 export type ChangeRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -367,38 +367,44 @@ export interface DashboardStats {
   }[]
 }
 
+type TableDef<T> = {
+  Row: T
+  Insert: Partial<T>
+  Update: Partial<T>
+}
+
 // Supabase Database type (simplified for client usage)
 export interface Database {
   public: {
     Tables: {
-      room_types: { Row: RoomType }
-      flats: { Row: Flat }
-      rooms: { Row: Room }
-      beds: { Row: Bed }
-      applications: { Row: Application }
-      documents: { Row: Document }
-      residents: { Row: Resident }
-      payments: { Row: Payment }
-      staff_profiles: { Row: StaffProfile }
-      amenities: { Row: Amenity }
-      room_amenities: { Row: RoomAmenity }
-      room_rates: { Row: RoomRate }
-      amenity_change_requests: { Row: AmenityChangeRequest }
-      rent_change_requests: { Row: RentChangeRequest }
-      resident_rent_history: { Row: ResidentRentHistory }
-      expense_categories: { Row: ExpenseCategory }
-      vendors: { Row: Vendor }
-      expenses: { Row: Expense }
-      cash_accounts: { Row: CashAccount }
-      cash_transactions: { Row: CashTransaction }
-      cash_counts: { Row: CashCount }
-      products: { Row: Product }
-      stock_purchases: { Row: StockPurchase }
-      stock_purchase_items: { Row: StockPurchaseItem }
-      sales: { Row: Sale }
-      sale_items: { Row: SaleItem }
-      stock_movements: { Row: StockMovement }
-      stock_counts: { Row: StockCount }
+      room_types: TableDef<RoomType>
+      flats: TableDef<Flat>
+      rooms: TableDef<Room>
+      beds: TableDef<Bed>
+      applications: TableDef<Application>
+      documents: TableDef<Document>
+      residents: TableDef<Resident>
+      payments: TableDef<Payment>
+      staff_profiles: TableDef<StaffProfile>
+      amenities: TableDef<Amenity>
+      room_amenities: TableDef<RoomAmenity>
+      room_rates: TableDef<RoomRate>
+      amenity_change_requests: TableDef<AmenityChangeRequest>
+      rent_change_requests: TableDef<RentChangeRequest>
+      resident_rent_history: TableDef<ResidentRentHistory>
+      expense_categories: TableDef<ExpenseCategory>
+      vendors: TableDef<Vendor>
+      expenses: TableDef<Expense>
+      cash_accounts: TableDef<CashAccount>
+      cash_transactions: TableDef<CashTransaction>
+      cash_counts: TableDef<CashCount>
+      products: TableDef<Product>
+      stock_purchases: TableDef<StockPurchase>
+      stock_purchase_items: TableDef<StockPurchaseItem>
+      sales: TableDef<Sale>
+      sale_items: TableDef<SaleItem>
+      stock_movements: TableDef<StockMovement>
+      stock_counts: TableDef<StockCount>
     }
   }
 }

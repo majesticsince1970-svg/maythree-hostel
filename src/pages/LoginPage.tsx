@@ -61,16 +61,52 @@ export function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          {DEMO_MODE && (
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Demo Credentials</p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p><strong>Admin:</strong> admin@maythree.com / admin123</p>
-                <p><strong>Staff:</strong> staff@maythree.com / staff123</p>
-                <p><strong>Store:</strong> store@maythree.com / store123</p>
-              </div>
+
+          <div className="mt-6 p-4 bg-muted/50 rounded-lg space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground">Quick Sign-in Credentials</p>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => { setEmail('admin@maythree.com'); setPassword('admin123') }}
+              >
+                Admin
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => { setEmail('staff@maythree.com'); setPassword('staff123') }}
+              >
+                Staff
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => { setEmail('store@maythree.com'); setPassword('store123') }}
+              >
+                Store
+              </Button>
             </div>
-          )}
+            <p className="text-[11px] text-muted-foreground text-center">
+              Click any role above to fill credentials instantly
+            </p>
+          </div>
+
+          <div className="mt-4 pt-4 border-t text-center">
+            <button
+              type="button"
+              onClick={() => navigate('/apply')}
+              className="text-xs text-primary hover:underline font-medium"
+            >
+              Need to apply for a room? Open Public Admission Form →
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>

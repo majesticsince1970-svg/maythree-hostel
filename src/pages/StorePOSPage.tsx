@@ -6,8 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { formatCurrency } from '@/lib/utils'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer } from 'lucide-react'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import {
+  Search, Plus, Minus, Trash2, ShoppingCart, CreditCard,
+  Banknote, Printer, Sparkles, User, Receipt, CheckCircle2
+} from 'lucide-react'
 import type { Product, SalePaymentMode } from '@/types/database'
 
 interface CartItem {
@@ -18,19 +21,23 @@ interface CartItem {
 interface CompletedSaleReceipt {
   id: string
   date: string
+  residentName?: string
   items: CartItem[]
   total: number
   mode: SalePaymentMode
 }
 
 export function StorePOSPage() {
-  const { products, recordSale } = useDemoData()
+  const { products, residents, sales, recordSale } = useDemoData()
   const { addToast } = useToast()
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMode, setPaymentMode] = useState<SalePaymentMode>('cash')
+  const [selectedResidentId, setSelectedResidentId] = useState<string>('')
   const [showReceipt, setShowReceipt] = useState(false)
   const [completedReceipt, setCompletedReceipt] = useState<CompletedSaleReceipt | null>(null)
+
+  const magicTumbler = products.find(p => p.name.toLowerCase().includes('magic tumbler'))
 
   const filteredProducts = products.filter(p =>
     p.is_active && (
@@ -91,7 +98,6 @@ export function StorePOSPage() {
   const handleCheckout = () => {
     if (cart.length === 0) return
 
-    // Validate that all items are in stock
     for (const item of cart) {
       const liveProduct = products.find(p => p.id === item.product.id)
       const liveStock = liveProduct?.stock_on_hand ?? 0
@@ -105,18 +111,19 @@ export function StorePOSPage() {
       }
     }
 
-    // Call context recordSale to reduce stock and persist sale/movement
     const salePayload = cart.map(i => ({
       productId: i.product.id,
       qty: i.qty,
       unitPrice: i.product.selling_price
     }))
 
-    const sale = recordSale(salePayload, paymentMode)
+    const resident = residents.find(r => r.id === selectedResidentId)
+    const sale = recordSale(salePayload, paymentMode, selectedResidentId || null)
 
     setCompletedReceipt({
       id: sale.id,
       date: sale.sale_date,
+      residentName: resident?.application?.full_name || 'Walk-in Guest',
       items: [...cart],
       total,
       mode: paymentMode
@@ -124,30 +131,63 @@ export function StorePOSPage() {
 
     addToast({
       type: 'success',
-      title: 'Sale Completed!',
+      title: 'Order Placed Successfully!',
       description: `Billed ${formatCurrency(total)} via ${paymentMode.toUpperCase()}. Stock updated.`
     })
 
     setCart([])
+    setSelectedResidentId('')
     setPaymentMode('cash')
     setShowReceipt(true)
   }
 
+  const activeResidents = residents.filter(r => r.status === 'active')
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Store Point of Sale</h1>
-          <p className="text-sm text-muted-foreground">Scan or tap products to bill hostel residents or walk-ins</p>
+          <h1 className="text-2xl font-bold">Store Point of Sale & Orders</h1>
+          <p className="text-sm text-muted-foreground">Bill hostel residents or walk-ins, track real-time inventory</p>
         </div>
-        <Badge variant="outline" className="text-base px-3 py-1.5 bg-primary/5">
+        <Badge variant="outline" className="text-base px-3 py-1.5 bg-primary/5 self-start sm:self-auto">
           <ShoppingCart className="h-4 w-4 mr-2 text-primary" />
           {cart.reduce((s, i) => s + i.qty, 0)} items · {formatCurrency(total)}
         </Badge>
       </div>
 
+      {/* Featured Magic Tumbler Order Banner */}
+      {magicTumbler && (
+        <Card className="border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-background shadow-sm">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="h-12 w-12 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-md">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-foreground">Magic Tumbler</h3>
+                  <Badge variant="success" className="text-xs">Featured Item</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Hostel special thermal tumbler · Price: <span className="font-bold text-foreground">{formatCurrency(magicTumbler.selling_price)}</span> ·
+                  <span className="ml-1 text-green-700 dark:text-green-400 font-semibold">{magicTumbler.stock_on_hand ?? 25} in stock</span>
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => addToCart(magicTumbler)}
+              className="font-semibold shadow-sm sm:w-auto w-full"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> Order Magic Tumbler
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Products */}
+        {/* Products Catalog */}
         <div className="lg:col-span-2 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -156,7 +196,6 @@ export function StorePOSPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
-              autoFocus
             />
           </div>
 
@@ -203,12 +242,12 @@ export function StorePOSPage() {
           })}
         </div>
 
-        {/* Cart */}
+        {/* Current Order / Cart */}
         <div className="lg:col-span-1">
           <Card className="sticky top-4 shadow-sm border-2">
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-lg flex items-center justify-between">
-                <span>Current Bill</span>
+                <span>Current Order</span>
                 {cart.length > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setCart([])} className="h-7 text-xs text-destructive">
                     Clear
@@ -217,15 +256,34 @@ export function StorePOSPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
+              {/* Resident Selector */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                  <User className="h-3.5 w-3.5" /> Customer / Resident
+                </label>
+                <select
+                  value={selectedResidentId}
+                  onChange={(e) => setSelectedResidentId(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">Walk-in Guest</option>
+                  {activeResidents.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.application?.full_name} (Room {r.bed?.room?.room_no || '—'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {cart.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
+                <div className="text-center py-10 text-muted-foreground">
                   <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm font-medium">Cart is empty</p>
-                  <p className="text-xs">Click or tap items from the list to bill</p>
+                  <p className="text-sm font-medium">No items in order</p>
+                  <p className="text-xs">Click items or order Magic Tumbler above</p>
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2 max-h-[38vh] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-[32vh] overflow-y-auto pr-1">
                     {cart.map((item) => (
                       <div key={item.product.id} className="flex items-center justify-between p-2.5 bg-muted/40 rounded-lg border">
                         <div className="flex-1 min-w-0 mr-2">
@@ -274,32 +332,41 @@ export function StorePOSPage() {
                       <span className="text-2xl text-primary">{formatCurrency(total)}</span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                       <Button
                         type="button"
                         variant={paymentMode === 'cash' ? 'default' : 'outline'}
                         size="sm"
-                        className="w-full"
+                        className="text-xs"
                         onClick={() => setPaymentMode('cash')}
                       >
-                        <Banknote className="h-4 w-4 mr-1.5" /> Cash
+                        <Banknote className="h-3.5 w-3.5 mr-1" /> Cash
                       </Button>
                       <Button
                         type="button"
                         variant={paymentMode === 'UPI' ? 'default' : 'outline'}
                         size="sm"
-                        className="w-full"
+                        className="text-xs"
                         onClick={() => setPaymentMode('UPI')}
                       >
-                        <CreditCard className="h-4 w-4 mr-1.5" /> UPI / QR
+                        <CreditCard className="h-3.5 w-3.5 mr-1" /> UPI
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={paymentMode === 'on_account' ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setPaymentMode('on_account')}
+                      >
+                        <Receipt className="h-3.5 w-3.5 mr-1" /> Account
                       </Button>
                     </div>
 
                     <Button
-                      className="w-full py-6 text-base font-bold shadow-md"
+                      className="w-full py-5 text-base font-bold shadow-md"
                       onClick={handleCheckout}
                     >
-                      Complete Sale · {formatCurrency(total)}
+                      Place Order · {formatCurrency(total)}
                     </Button>
                   </div>
                 </>
@@ -309,14 +376,86 @@ export function StorePOSPage() {
         </div>
       </div>
 
+      {/* Recent Orders Section */}
+      <Card>
+        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" /> Recent Store Orders
+          </CardTitle>
+          <Badge variant="outline">{sales.length} orders recorded</Badge>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {sales.length === 0 ? (
+            <p className="text-center py-6 text-sm text-muted-foreground">No orders completed yet</p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {sales.slice(0, 10).map((sale) => {
+                const resident = residents.find(r => r.id === sale.resident_id)
+                const itemsCount = sale.items?.reduce((s, i) => s + i.qty, 0) || 1
+                return (
+                  <div
+                    key={sale.id}
+                    className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border text-sm"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">Order #{sale.id.slice(-6)}</span>
+                        <Badge variant="outline" className="text-[10px] uppercase">{sale.payment_mode}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatDate(sale.sale_date)} · Customer: {resident?.application?.full_name || 'Walk-in'} · {itemsCount} item(s)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-primary">{formatCurrency(sale.total)}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          setCompletedReceipt({
+                            id: sale.id,
+                            date: sale.sale_date,
+                            residentName: resident?.application?.full_name || 'Walk-in Guest',
+                            items: (sale.items || []).map(i => ({
+                              product: i.product || products.find(p => p.id === i.product_id) || {
+                                id: i.product_id,
+                                name: 'Store Item',
+                                category: 'General',
+                                unit: 'piece',
+                                barcode: null,
+                                cost_price: i.unit_cost,
+                                selling_price: i.unit_price,
+                                reorder_level: 10,
+                                is_active: true
+                              },
+                              qty: i.qty
+                            })),
+                            total: sale.total,
+                            mode: sale.payment_mode
+                          })
+                          setShowReceipt(true)
+                        }}
+                      >
+                        Receipt
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Itemized Sale Receipt Modal */}
       <Dialog open={showReceipt} onClose={() => setShowReceipt(false)}>
         {completedReceipt && (
           <div className="space-y-4">
             <div className="text-center pb-2 border-b">
               <h2 className="text-lg font-bold text-foreground">MayThree Hostel Store</h2>
-              <p className="text-xs text-muted-foreground">Receipt #{completedReceipt.id}</p>
-              <p className="text-xs text-muted-foreground">{completedReceipt.date}</p>
+              <p className="text-xs text-muted-foreground">Order #{completedReceipt.id}</p>
+              <p className="text-xs text-muted-foreground">{completedReceipt.date} · {completedReceipt.residentName}</p>
             </div>
 
             <div className="max-h-60 overflow-y-auto space-y-2 border-b pb-3">
@@ -346,9 +485,7 @@ export function StorePOSPage() {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => {
-                  window.print()
-                }}
+                onClick={() => window.print()}
               >
                 <Printer className="h-4 w-4 mr-1.5" /> Print Receipt
               </Button>
