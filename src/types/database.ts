@@ -94,9 +94,33 @@ export interface Resident {
   monthly_rent: number
   deposit_amount: number
   status: ResidentStatus
+  pin?: string
+  pin_active?: boolean
   application?: Application
   bed?: Bed
   payments?: Payment[]
+}
+
+export type SettlementType = 'refund' | 'collected' | 'settled'
+
+export interface VacatedResident {
+  id: string
+  resident_id: string
+  resident_name: string
+  room_no: string
+  bed_label: string
+  admission_date: string
+  vacate_date: string
+  reason: string | null
+  notes: string | null
+  pending_dues: number
+  deposit_amount: number
+  deductions: number
+  settlement_amount: number
+  settlement_type: SettlementType
+  account_id: string | null
+  processed_by: string
+  created_at: string
 }
 
 export interface Payment {
@@ -384,6 +408,7 @@ export interface Database {
       applications: TableDef<Application>
       documents: TableDef<Document>
       residents: TableDef<Resident>
+      vacated_residents: TableDef<VacatedResident>
       payments: TableDef<Payment>
       staff_profiles: TableDef<StaffProfile>
       amenities: TableDef<Amenity>

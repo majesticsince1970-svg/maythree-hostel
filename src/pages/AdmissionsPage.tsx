@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { ApplicationsPage } from '@/pages/ApplicationsPage'
 import { RoomsPage } from '@/pages/RoomsPage'
+import { VacateResidentManager } from '@/components/VacateResidentManager'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -108,40 +109,7 @@ export function AdmissionsPage() {
       {/* Module Content */}
       {currentTab === 'applications' && <ApplicationsPage />}
       {currentTab === 'rooms' && <RoomsPage />}
-      {currentTab === 'vacate' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <UserMinus className="h-5 w-5 text-primary" />
-                Vacating & Departure Management
-              </span>
-              <Badge variant="outline">Phase 2 Process</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select an active resident to begin the checkout settlement, calculate deposit refund/dues deduction, and free the bed.
-            </p>
-            <div className="p-6 bg-muted/30 rounded-xl border text-center space-y-3">
-              <div className="h-12 w-12 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center">
-                <UserMinus className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-base">Resident Vacate Settlement Workflow</h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Ready to be activated in Phase 2. Automatically posts to Cash Book, sets resident status to Vacated, frees bed capacity, and updates the Departure Log.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setTab('rooms')}
-              >
-                Go to Bed Board to view current occupants
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {currentTab === 'vacate' && <VacateResidentManager />}
       {currentTab === 'qr' && (
         <Card>
           <CardHeader>
@@ -187,3 +155,4 @@ export function AdmissionsPage() {
     </div>
   )
 }
+

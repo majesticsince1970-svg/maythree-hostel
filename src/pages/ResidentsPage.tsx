@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/ui/loading'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Resident, ResidentStatus } from '@/types/database'
-import { Search, Eye, Phone, BedDouble, User, CalendarX } from 'lucide-react'
+import { Search, Eye, Phone, BedDouble, User, CalendarX, KeyRound, UserMinus } from 'lucide-react'
 
 type FilterTab = 'all' | 'active' | 'checked_out'
 
@@ -29,6 +30,7 @@ const statusLabel: Record<ResidentStatus, string> = {
 }
 
 export function ResidentsPage() {
+  const navigate = useNavigate()
   const { residents, payments, rentDueList } = useDemoData()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Resident | null>(null)
@@ -51,7 +53,7 @@ export function ResidentsPage() {
   })
 
   const activeCount = residents.filter((r) => r.status === 'active' || r.status === 'notice').length
-  const checkedOutCount = residents.filter((r) => r.status === 'checked_out').length
+  const checkedOutCount = residents.filter((r) => r.status === 'checked_out' || r.status === 'vacated').length
 
   const getBalance = (residentId: string) => {
     const due = rentDueList.find((r) => r.resident_id === residentId)
@@ -218,7 +220,17 @@ export function ResidentsPage() {
                 <div><p className="text-muted-foreground">Check-in</p><p className="font-medium">{formatDate(selected.check_in_date)}</p></div>
                 <div><p className="text-muted-foreground">Monthly Rent</p><p className="font-medium">{formatCurrency(selected.monthly_rent)}</p></div>
                 <div><p className="text-muted-foreground">Deposit</p><p className="font-medium">{formatCurrency(selected.deposit_amount)}</p></div>
-                {selected.status === 'checked_out' && selected.check_out_date && (
+                <div>
+                  <p className="text-muted-foreground">Entrance PIN</p>
+                  <p className="font-mono font-bold text-primary flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    {selected.pin || '1021'}
+                    {selected.pin_active === false && (
+                      <Badge variant="destructive" className="text-[9px] px-1 py-0">Deactivated</Badge>
+                    )}
+                  </p>
+                </div>
+                {(selected.status === 'checked_out' || selected.status === 'vacated') && selected.check_out_date && (
                   <div>
                     <p className="text-muted-foreground">Check-out</p>
                     <p className="font-medium">{formatDate(selected.check_out_date)}</p>
@@ -245,13 +257,27 @@ export function ResidentsPage() {
                 )}
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => window.open(`tel:${selected.application?.phone}`)}>
                   <Phone className="h-4 w-4 mr-1" /> Call
                 </Button>
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => window.open(`https://wa.me/91${selected.application?.phone}`)}>
                   WhatsApp
                 </Button>
+                {(selected.status === 'active' || selected.status === 'notice') && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full mt-1"
+                    onClick={() => {
+                      setSelected(null)
+                      navigate('/admissions?tab=vacate')
+                    }}
+                  >
+                    <UserMinus className="h-4 w-4 mr-1.5" />
+                    Proceed to Vacate & Settlement
+                  </Button>
+                )}
               </div>
             </div>
           </>

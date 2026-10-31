@@ -5,8 +5,24 @@ import type {
   ExpenseCategory, Expense, CashAccount, CashTransaction,
   Product, Vendor, Sale, SaleItem, StockMovement, StockPurchase, StockPurchaseItem, StockCount,
   DashboardStats, RentDueView, PublicRoomOption,
-  ApplicationStatus, BedStatus, StaffProfile, StockMovementType, SalePaymentMode
+  ApplicationStatus, BedStatus, StaffProfile, StockMovementType, SalePaymentMode,
+  VacatedResident, SettlementType, CashDirection
 } from '@/types/database'
+
+export interface VacateResidentParams {
+  residentId: string
+  vacateDate: string
+  reason?: string
+  notes?: string
+  pendingDues: number
+  depositAmount: number
+  deductions: number
+  deductionReason?: string
+  settlementAmount: number
+  settlementType: SettlementType
+  accountId: string
+  processedBy?: string
+}
 
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
 const STORAGE_KEY = 'maythree_hostel_state_v6'
@@ -131,21 +147,66 @@ const initResidents: Resident[] = [
   {
     id: 'res-1', application_id: 'app-3', bed_id: 'bed-201-A', check_in_date: '2026-10-01',
     check_out_date: null, monthly_rent: 8000, deposit_amount: 16000, status: 'active',
+    pin: '1021', pin_active: true,
     application: initApplications[2],
     bed: { id: 'bed-201-A', room_id: 'room-201', bed_label: 'A', status: 'occupied', room: initRooms[0] }
   },
   {
     id: 'res-2', application_id: 'app-6', bed_id: 'bed-301-A', check_in_date: '2026-09-15',
     check_out_date: null, monthly_rent: 10000, deposit_amount: 20000, status: 'active',
+    pin: '2045', pin_active: true,
     application: { ...initApplications[0], id: 'app-6', full_name: 'Meera Iyer', phone: '9876543260', ref_no: 'HST-2026-0006', occupation: 'Working Professional', institution_or_employer: 'Wipro' },
     bed: { id: 'bed-301-A', room_id: 'room-301', bed_label: 'A', status: 'occupied', room: initRooms[19] }
   },
   {
     id: 'res-3', application_id: 'app-7', bed_id: 'bed-B1-A', check_in_date: '2026-08-01',
     check_out_date: null, monthly_rent: 7000, deposit_amount: 14000, status: 'active',
+    pin: '3089', pin_active: true,
     application: { ...initApplications[0], id: 'app-7', full_name: 'Roshni Das', phone: '9876543270', ref_no: 'HST-2026-0007', occupation: 'Student', institution_or_employer: 'VIT University' },
     bed: { id: 'bed-B1-A', room_id: 'room-B1', bed_label: 'A', status: 'occupied' }
   },
+]
+
+// ── Initial Vacated Residents (Departure Log) ──
+const initVacatedResidents: VacatedResident[] = [
+  {
+    id: 'vac-1',
+    resident_id: 'res-old-1',
+    resident_name: 'Ananya Sharma',
+    room_no: '202',
+    bed_label: 'B',
+    admission_date: '2026-05-10',
+    vacate_date: '2026-10-15',
+    reason: 'Completed internship in Chennai',
+    notes: 'Handover complete. Keys returned.',
+    pending_dues: 0,
+    deposit_amount: 16000,
+    deductions: 500,
+    settlement_amount: 15500,
+    settlement_type: 'refund',
+    account_id: 'ca-4',
+    processed_by: 'Admin User',
+    created_at: '2026-10-15T11:30:00Z'
+  },
+  {
+    id: 'vac-2',
+    resident_id: 'res-old-2',
+    resident_name: 'Pooja Hegde',
+    room_no: '305',
+    bed_label: 'A',
+    admission_date: '2026-06-01',
+    vacate_date: '2026-09-30',
+    reason: 'Job relocation to Bengaluru',
+    notes: 'Settled dues in full',
+    pending_dues: 2000,
+    deposit_amount: 10000,
+    deductions: 0,
+    settlement_amount: 8000,
+    settlement_type: 'refund',
+    account_id: 'ca-5',
+    processed_by: 'Staff User',
+    created_at: '2026-09-30T16:00:00Z'
+  }
 ]
 
 // ── Payments ──
@@ -298,6 +359,7 @@ interface DemoDataContextType {
   stockCounts: StockCount[]
   staffList: StaffProfile[]
   acRooms: Set<string>
+  vacatedResidents: VacatedResident[]
   // Computed
   dashboardStats: DashboardStats
   publicRoomOptions: PublicRoomOption[]
@@ -308,6 +370,8 @@ interface DemoDataContextType {
   // Bed allocation & checkout
   allocateBed: (applicationId: string, bedId: string, checkInDate: string, depositAmount: number) => void
   checkOutResident: (residentId: string, checkOutDate: string) => void
+  vacateResident: (params: VacateResidentParams) => VacatedResident
+  resetResidentPin: (residentId: string, newPin?: string) => string
   updateBedStatus: (bedId: string, status: BedStatus) => void
   // Payments
   addPayment: (payment: Omit<Payment, 'id' | 'receipt_no'>) => Payment
@@ -355,6 +419,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [stockPurchases, setStockPurchases] = useState<StockPurchase[]>(stored?.stockPurchases || [])
   const [stockCounts, setStockCounts] = useState<StockCount[]>(stored?.stockCounts || [])
   const [staffList, setStaffList] = useState<StaffProfile[]>(stored?.staffList || initStaff)
+  const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>(stored?.vacatedResidents || initVacatedResidents)
   const [acRoomsState, setAcRooms] = useState<Set<string>>(
     stored?.acRooms ? new Set(stored.acRooms) : acRoomIds
   )
@@ -379,6 +444,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         stockPurchases,
         stockCounts,
         staffList,
+        vacatedResidents,
         acRooms: Array.from(acRoomsState),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
@@ -388,7 +454,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   }, [
     roomTypes, rooms, beds, applications, residents, payments, expenses,
     cashAccounts, cashTransactions, products, sales, stockMovements,
-    stockPurchases, stockCounts, staffList, acRoomsState
+    stockPurchases, stockCounts, staffList, vacatedResidents, acRoomsState
   ])
 
   // ── Listen for cross-tab updates ──
@@ -412,6 +478,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           if (fresh.stockPurchases) setStockPurchases(fresh.stockPurchases)
           if (fresh.stockCounts) setStockCounts(fresh.stockCounts)
           if (fresh.staffList) setStaffList(fresh.staffList)
+          if (fresh.vacatedResidents) setVacatedResidents(fresh.vacatedResidents)
           if (fresh.acRooms) setAcRooms(new Set(fresh.acRooms))
         } catch (err) {
           console.warn('Cross-tab sync error:', err)
@@ -433,11 +500,13 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           { data: remoteResidents },
           { data: remotePayments },
           { data: remoteProducts },
+          { data: remoteVacated },
         ] = await Promise.all([
           supabase.from('applications').select('*'),
           supabase.from('residents').select('*, application:applications(*), bed:beds(*, room:rooms(*))'),
           supabase.from('payments').select('*'),
           supabase.from('products').select('*'),
+          supabase.from('vacated_residents').select('*'),
         ])
 
         if (remoteProducts && remoteProducts.length > 0) {
@@ -483,6 +552,15 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
             const existingIds = new Set(prev.map(p => p.id))
             const newOnes = rPay.filter(p => !existingIds.has(p.id))
             return [...prev, ...newOnes]
+          })
+        }
+
+        if (remoteVacated && remoteVacated.length > 0) {
+          const rVac = remoteVacated as unknown as VacatedResident[]
+          setVacatedResidents(prev => {
+            const existingIds = new Set(prev.map(v => v.id))
+            const newOnes = rVac.filter(v => !existingIds.has(v.id))
+            return [...newOnes, ...prev]
           })
         }
       } catch (e) {
@@ -594,6 +672,17 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const room = rooms.find(r => r.id === bed.room_id)
     const rt = roomTypes.find(t => t.id === room?.room_type_id)
 
+    // Generate unique 4-digit PIN for new resident
+    const existingPins = new Set(residents.filter(r => r.status === 'active' && r.pin).map(r => r.pin))
+    let autoPin = '1234'
+    for (let i = 0; i < 500; i++) {
+      const candidate = Math.floor(1000 + Math.random() * 9000).toString()
+      if (!existingPins.has(candidate)) {
+        autoPin = candidate
+        break
+      }
+    }
+
     // Create resident
     const newResident: Resident = {
       id: `res-${Date.now()}`,
@@ -604,6 +693,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       monthly_rent: rt?.rent_per_head || 8000,
       deposit_amount: depositAmount,
       status: 'active',
+      pin: autoPin,
+      pin_active: true,
       application: app,
       bed: { ...bed, status: 'occupied', room: room },
     }
@@ -639,6 +730,132 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       (supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
       (supabase as any).from('residents').update({ status: 'checked_out', check_out_date: checkOutDate }).eq('id', residentId).then()
     }
+  }, [residents])
+
+  // ── Vacate Resident (Full Phase 2 checkout settlement) ──
+  const vacateResident = useCallback((params: VacateResidentParams): VacatedResident => {
+    const resident = residents.find(r => r.id === params.residentId)
+    if (!resident) {
+      throw new Error(`Resident ${params.residentId} not found`)
+    }
+
+    const room = rooms.find(rm => rm.id === resident.bed?.room_id)
+    const residentName = resident.application?.full_name || 'Resident'
+    const roomNo = room?.room_no || resident.bed?.room?.room_no || '—'
+    const bedLabel = resident.bed?.bed_label || 'A'
+
+    // 1. Free the bed (status -> available)
+    setBeds(prev => prev.map(b => b.id === resident.bed_id ? { ...b, status: 'available' as BedStatus } : b))
+
+    // 2. Mark resident as vacated, deactivate PIN
+    setResidents(prev => prev.map(r => r.id === params.residentId ? {
+      ...r,
+      status: 'vacated' as const,
+      check_out_date: params.vacateDate,
+      pin_active: false
+    } : r))
+
+    // 3. Create departure record
+    const settlementAmt = Math.abs(Number(params.settlementAmount) || 0)
+    const newDeparture: VacatedResident = {
+      id: `vac-${Date.now()}`,
+      resident_id: resident.id,
+      resident_name: residentName,
+      room_no: roomNo,
+      bed_label: bedLabel,
+      admission_date: resident.check_in_date,
+      vacate_date: params.vacateDate,
+      reason: params.reason || null,
+      notes: params.notes || null,
+      pending_dues: Number(params.pendingDues) || 0,
+      deposit_amount: Number(params.depositAmount) || 0,
+      deductions: Number(params.deductions) || 0,
+      settlement_amount: settlementAmt,
+      settlement_type: params.settlementType,
+      account_id: params.accountId || null,
+      processed_by: params.processedBy || 'Admin User',
+      created_at: new Date().toISOString()
+    }
+
+    setVacatedResidents(prev => [newDeparture, ...prev])
+
+    // 4. Post automatically to Cash Book as a transaction
+    // refund = cash out, dues collected = cash in, with resident name and "Vacate settlement"
+    if (settlementAmt > 0 && params.accountId) {
+      const isRefund = params.settlementType === 'refund'
+      const direction: CashDirection = isRefund ? 'out' : 'in'
+      const note = `${residentName} - Vacate settlement`
+
+      const newTxn: CashTransaction = {
+        id: `ct-vac-${Date.now()}`,
+        account_id: params.accountId,
+        txn_date: params.vacateDate,
+        direction,
+        amount: settlementAmt,
+        source: 'adjustment',
+        source_id: newDeparture.id,
+        note,
+        recorded_by: params.processedBy || 'Admin User'
+      }
+
+      setCashTransactions(prev => [newTxn, ...prev])
+
+      // Update cash account balance
+      setCashAccounts(prev => prev.map(acc => {
+        if (acc.id === params.accountId) {
+          const currentBal = acc.balance || 0
+          const updatedBal = isRefund ? currentBal - settlementAmt : currentBal + settlementAmt
+          return { ...acc, balance: updatedBal }
+        }
+        return acc
+      }))
+
+      if (!DEMO_MODE) {
+        ;(supabase as any).from('cash_transactions').insert([newTxn]).then()
+        const targetAcc = cashAccounts.find(a => a.id === params.accountId)
+        if (targetAcc) {
+          const accBal = targetAcc.balance || 0
+          const finalBal = isRefund ? accBal - settlementAmt : accBal + settlementAmt;
+          ;(supabase as any).from('cash_accounts').update({ balance: finalBal }).eq('id', params.accountId).then()
+        }
+      }
+    }
+
+    // 5. Remote Supabase sync
+    if (!DEMO_MODE) {
+      (supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
+      (supabase as any).from('residents').update({
+        status: 'vacated',
+        check_out_date: params.vacateDate,
+        pin_active: false
+      }).eq('id', resident.id).then()
+      (supabase as any).from('vacated_residents').insert([newDeparture]).then()
+    }
+
+    return newDeparture
+  }, [residents, rooms, cashAccounts])
+
+  // ── PIN Reset ──
+  const resetResidentPin = useCallback((residentId: string, newPin?: string): string => {
+    const existingPins = new Set(residents.filter(r => r.id !== residentId && r.status === 'active' && r.pin).map(r => r.pin))
+    let pinToSet = newPin
+    if (!pinToSet) {
+      for (let i = 0; i < 500; i++) {
+        const candidate = Math.floor(1000 + Math.random() * 9000).toString()
+        if (!existingPins.has(candidate)) {
+          pinToSet = candidate
+          break
+        }
+      }
+    }
+    if (!pinToSet) pinToSet = '1234'
+
+    setResidents(prev => prev.map(r => r.id === residentId ? { ...r, pin: pinToSet, pin_active: true } : r))
+
+    if (!DEMO_MODE) {
+      (supabase as any).from('residents').update({ pin: pinToSet, pin_active: true }).eq('id', residentId).then()
+    }
+    return pinToSet
   }, [residents])
 
   const updateBedStatus = useCallback((bedId: string, status: BedStatus) => {
@@ -1049,6 +1266,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       stockCounts,
       staffList,
       acRooms: acRoomsState,
+      vacatedResidents,
       dashboardStats,
       publicRoomOptions,
       rentDueList,
@@ -1056,6 +1274,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       updateApplicationStatus,
       allocateBed,
       checkOutResident,
+      vacateResident,
+      resetResidentPin,
       updateBedStatus,
       addPayment,
       addExpense,
