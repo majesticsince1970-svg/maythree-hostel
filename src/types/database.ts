@@ -103,6 +103,49 @@ export interface Resident {
 
 export type SettlementType = 'refund' | 'collected' | 'settled'
 
+export interface RentBreakdownItem {
+  month: string // e.g. "2026-09"
+  label: string // e.g. "September 2026" or "October 2026 (1-15 Oct, 15 days)"
+  rent_due: number
+  amount_paid: number
+  balance: number
+  is_current_month?: boolean
+  days_stayed?: number
+  total_days?: number
+}
+
+export interface DeductionItem {
+  id: string
+  description: string
+  amount: number
+}
+
+export interface CheckoutReceipt {
+  id: string
+  receipt_no: string
+  vacated_id?: string
+  resident_id: string
+  resident_name: string
+  phone: string
+  room_no: string
+  bed_label: string
+  admission_date: string
+  checkout_date: string
+  advance_amount: number
+  pending_rent_deducted: number
+  other_deductions: number
+  final_refund_amount: number
+  settlement_type: SettlementType
+  amount_in_words: string
+  payment_mode: PaymentMode
+  account_id?: string | null
+  rent_breakdown?: RentBreakdownItem[]
+  deductions_breakdown?: DeductionItem[]
+  notes?: string | null
+  issued_by: string
+  created_at: string
+}
+
 export interface VacatedResident {
   id: string
   resident_id: string
@@ -119,6 +162,11 @@ export interface VacatedResident {
   settlement_amount: number
   settlement_type: SettlementType
   account_id: string | null
+  receipt_no?: string | null
+  advance_status?: 'Returned' | 'Adjusted' | string
+  payment_mode?: PaymentMode | string
+  rent_breakdown?: RentBreakdownItem[]
+  deductions_breakdown?: DeductionItem[]
   processed_by: string
   created_at: string
 }
@@ -409,6 +457,7 @@ export interface Database {
       documents: TableDef<Document>
       residents: TableDef<Resident>
       vacated_residents: TableDef<VacatedResident>
+      checkout_receipts: TableDef<CheckoutReceipt>
       payments: TableDef<Payment>
       staff_profiles: TableDef<StaffProfile>
       amenities: TableDef<Amenity>

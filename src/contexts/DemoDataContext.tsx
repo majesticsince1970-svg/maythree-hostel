@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { numberToWordsINR } from '@/lib/numberToWords'
 import type {
   Application, Bed, Room, RoomType, Flat, Resident, Payment,
   ExpenseCategory, Expense, CashAccount, CashTransaction,
   Product, Vendor, Sale, SaleItem, StockMovement, StockPurchase, StockPurchaseItem, StockCount,
   DashboardStats, RentDueView, PublicRoomOption,
   ApplicationStatus, BedStatus, StaffProfile, StockMovementType, SalePaymentMode,
-  VacatedResident, SettlementType, CashDirection
+  VacatedResident, SettlementType, CashDirection, PaymentMode,
+  RentBreakdownItem, DeductionItem, CheckoutReceipt
 } from '@/types/database'
 
 export interface VacateResidentParams {
@@ -18,9 +20,13 @@ export interface VacateResidentParams {
   depositAmount: number
   deductions: number
   deductionReason?: string
+  deductionsBreakdown?: DeductionItem[]
+  rentBreakdown?: RentBreakdownItem[]
   settlementAmount: number
   settlementType: SettlementType
   accountId: string
+  paymentMode?: PaymentMode
+  advanceStatus?: 'Returned' | 'Adjusted'
   processedBy?: string
 }
 
@@ -185,6 +191,15 @@ const initVacatedResidents: VacatedResident[] = [
     settlement_amount: 15500,
     settlement_type: 'refund',
     account_id: 'ca-4',
+    receipt_no: 'CKR-2026-0001',
+    advance_status: 'Returned',
+    payment_mode: 'bank',
+    rent_breakdown: [
+      { month: '2026-10', label: 'October 2026 (1-15 Oct, 15 days)', rent_due: 0, amount_paid: 0, balance: 0, days_stayed: 15, total_days: 31 }
+    ],
+    deductions_breakdown: [
+      { id: 'd-1', description: 'Room cleaning & key replacement', amount: 500 }
+    ],
     processed_by: 'Admin User',
     created_at: '2026-10-15T11:30:00Z'
   },
@@ -204,7 +219,74 @@ const initVacatedResidents: VacatedResident[] = [
     settlement_amount: 8000,
     settlement_type: 'refund',
     account_id: 'ca-5',
+    receipt_no: 'CKR-2026-0002',
+    advance_status: 'Returned',
+    payment_mode: 'UPI',
+    rent_breakdown: [
+      { month: '2026-09', label: 'September 2026', rent_due: 10000, amount_paid: 8000, balance: 2000 }
+    ],
+    deductions_breakdown: [],
     processed_by: 'Staff User',
+    created_at: '2026-09-30T16:00:00Z'
+  }
+]
+
+// ── Initial Checkout Receipts ──
+const initCheckoutReceipts: CheckoutReceipt[] = [
+  {
+    id: 'ckr-1',
+    receipt_no: 'CKR-2026-0001',
+    vacated_id: 'vac-1',
+    resident_id: 'res-old-1',
+    resident_name: 'Ananya Sharma',
+    phone: '9876543210',
+    room_no: '202',
+    bed_label: 'B',
+    admission_date: '2026-05-10',
+    checkout_date: '2026-10-15',
+    advance_amount: 16000,
+    pending_rent_deducted: 0,
+    other_deductions: 500,
+    final_refund_amount: 15500,
+    settlement_type: 'refund',
+    amount_in_words: 'Rupees Fifteen Thousand Five Hundred Only',
+    payment_mode: 'bank',
+    account_id: 'ca-4',
+    rent_breakdown: [
+      { month: '2026-10', label: 'October 2026 (1-15 Oct, 15 days)', rent_due: 0, amount_paid: 0, balance: 0, days_stayed: 15, total_days: 31 }
+    ],
+    deductions_breakdown: [
+      { id: 'd-1', description: 'Room cleaning & key replacement', amount: 500 }
+    ],
+    notes: 'Handover complete. Keys returned.',
+    issued_by: 'Admin User',
+    created_at: '2026-10-15T11:30:00Z'
+  },
+  {
+    id: 'ckr-2',
+    receipt_no: 'CKR-2026-0002',
+    vacated_id: 'vac-2',
+    resident_id: 'res-old-2',
+    resident_name: 'Pooja Hegde',
+    phone: '9876543220',
+    room_no: '305',
+    bed_label: 'A',
+    admission_date: '2026-06-01',
+    checkout_date: '2026-09-30',
+    advance_amount: 10000,
+    pending_rent_deducted: 2000,
+    other_deductions: 0,
+    final_refund_amount: 8000,
+    settlement_type: 'refund',
+    amount_in_words: 'Rupees Eight Thousand Only',
+    payment_mode: 'UPI',
+    account_id: 'ca-5',
+    rent_breakdown: [
+      { month: '2026-09', label: 'September 2026', rent_due: 10000, amount_paid: 8000, balance: 2000 }
+    ],
+    deductions_breakdown: [],
+    notes: 'Settled dues in full',
+    issued_by: 'Staff User',
     created_at: '2026-09-30T16:00:00Z'
   }
 ]
@@ -360,6 +442,9 @@ interface DemoDataContextType {
   staffList: StaffProfile[]
   acRooms: Set<string>
   vacatedResidents: VacatedResident[]
+  checkoutReceipts: CheckoutReceipt[]
+  checkoutRentRule: 'per_day' | 'full_month'
+  setCheckoutRentRule: (rule: 'per_day' | 'full_month') => void
   // Computed
   dashboardStats: DashboardStats
   publicRoomOptions: PublicRoomOption[]
@@ -367,10 +452,19 @@ interface DemoDataContextType {
   // Application actions
   addApplication: (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>) => Application
   updateApplicationStatus: (id: string, status: ApplicationStatus, note?: string) => void
+  updateApplicationDetails: (id: string, details: Partial<Application>) => void
   // Bed allocation & checkout
-  allocateBed: (applicationId: string, bedId: string, checkInDate: string, depositAmount: number) => void
+  allocateBed: (
+    applicationId: string,
+    bedId: string,
+    checkInDate: string,
+    depositAmount: number,
+    monthlyRent?: number,
+    advanceReceived?: boolean,
+    advanceAccountId?: string
+  ) => void
   checkOutResident: (residentId: string, checkOutDate: string) => void
-  vacateResident: (params: VacateResidentParams) => VacatedResident
+  vacateResident: (params: VacateResidentParams) => { vacated: VacatedResident; receipt: CheckoutReceipt }
   resetResidentPin: (residentId: string, newPin?: string) => string
   updateBedStatus: (bedId: string, status: BedStatus) => void
   // Payments
@@ -420,6 +514,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [stockCounts, setStockCounts] = useState<StockCount[]>(stored?.stockCounts || [])
   const [staffList, setStaffList] = useState<StaffProfile[]>(stored?.staffList || initStaff)
   const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>(stored?.vacatedResidents || initVacatedResidents)
+  const [checkoutReceipts, setCheckoutReceipts] = useState<CheckoutReceipt[]>(stored?.checkoutReceipts || initCheckoutReceipts)
+  const [checkoutRentRule, setCheckoutRentRule] = useState<'per_day' | 'full_month'>(stored?.checkoutRentRule || 'per_day')
   const [acRoomsState, setAcRooms] = useState<Set<string>>(
     stored?.acRooms ? new Set(stored.acRooms) : acRoomIds
   )
@@ -445,6 +541,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         stockCounts,
         staffList,
         vacatedResidents,
+        checkoutReceipts,
+        checkoutRentRule,
         acRooms: Array.from(acRoomsState),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
@@ -454,7 +552,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   }, [
     roomTypes, rooms, beds, applications, residents, payments, expenses,
     cashAccounts, cashTransactions, products, sales, stockMovements,
-    stockPurchases, stockCounts, staffList, vacatedResidents, acRoomsState
+    stockPurchases, stockCounts, staffList, vacatedResidents, checkoutReceipts,
+    checkoutRentRule, acRoomsState
   ])
 
   // ── Listen for cross-tab updates ──
@@ -479,6 +578,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           if (fresh.stockCounts) setStockCounts(fresh.stockCounts)
           if (fresh.staffList) setStaffList(fresh.staffList)
           if (fresh.vacatedResidents) setVacatedResidents(fresh.vacatedResidents)
+          if (fresh.checkoutReceipts) setCheckoutReceipts(fresh.checkoutReceipts)
+          if (fresh.checkoutRentRule) setCheckoutRentRule(fresh.checkoutRentRule)
           if (fresh.acRooms) setAcRooms(new Set(fresh.acRooms))
         } catch (err) {
           console.warn('Cross-tab sync error:', err)
@@ -501,12 +602,14 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           { data: remotePayments },
           { data: remoteProducts },
           { data: remoteVacated },
+          { data: remoteReceipts },
         ] = await Promise.all([
           supabase.from('applications').select('*'),
           supabase.from('residents').select('*, application:applications(*), bed:beds(*, room:rooms(*))'),
           supabase.from('payments').select('*'),
           supabase.from('products').select('*'),
           supabase.from('vacated_residents').select('*'),
+          supabase.from('checkout_receipts').select('*'),
         ])
 
         if (remoteProducts && remoteProducts.length > 0) {
@@ -560,6 +663,15 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           setVacatedResidents(prev => {
             const existingIds = new Set(prev.map(v => v.id))
             const newOnes = rVac.filter(v => !existingIds.has(v.id))
+            return [...newOnes, ...prev]
+          })
+        }
+
+        if (remoteReceipts && remoteReceipts.length > 0) {
+          const rRec = remoteReceipts as unknown as CheckoutReceipt[]
+          setCheckoutReceipts(prev => {
+            const existingIds = new Set(prev.map(r => r.id))
+            const newOnes = rRec.filter(r => !existingIds.has(r.id))
             return [...newOnes, ...prev]
           })
         }
@@ -661,8 +773,26 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const updateApplicationDetails = useCallback((id: string, details: Partial<Application>) => {
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, ...details } : a))
+
+    if (!DEMO_MODE) {
+      ;(supabase as any).from('applications').update(details).eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase application details update warning:', error.message)
+      })
+    }
+  }, [])
+
   // ── Bed allocation (influences Bed, Resident, Application & Dashboard) ──
-  const allocateBed = useCallback((applicationId: string, bedId: string, checkInDate: string, depositAmount: number) => {
+  const allocateBed = useCallback((
+    applicationId: string,
+    bedId: string,
+    checkInDate: string,
+    depositAmount: number,
+    monthlyRent?: number,
+    advanceReceived: boolean = true,
+    advanceAccountId: string = 'ca-3'
+  ) => {
     const app = applications.find(a => a.id === applicationId)
     if (!app) return
 
@@ -683,6 +813,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    const rentToCharge = monthlyRent || rt?.rent_per_head || 8000
+
     // Create resident
     const newResident: Resident = {
       id: `res-${Date.now()}`,
@@ -690,7 +822,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       bed_id: bedId,
       check_in_date: checkInDate,
       check_out_date: null,
-      monthly_rent: rt?.rent_per_head || 8000,
+      monthly_rent: rentToCharge,
       deposit_amount: depositAmount,
       status: 'active',
       pin: autoPin,
@@ -708,12 +840,45 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     // Update application status
     setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: 'approved' as ApplicationStatus, review_note: 'Approved and bed allocated', reviewed_by: 'demo-staff-1' } : a))
 
-    if (!DEMO_MODE) {
-      (supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then()
-      (supabase as any).from('residents').insert([newResident]).then()
-      (supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then()
+    // Advance received -> post cash IN transaction to Cash Book
+    if (advanceReceived && depositAmount > 0) {
+      const targetAccId = advanceAccountId || 'ca-3'
+      const advanceTxn: CashTransaction = {
+        id: `ct-adv-${Date.now()}`,
+        account_id: targetAccId,
+        txn_date: checkInDate,
+        direction: 'in',
+        amount: depositAmount,
+        source: 'adjustment',
+        source_id: newResident.id,
+        note: `${app.full_name} - Advance security deposit received (Room ${room?.room_no || '—'} · Bed ${bed.bed_label})`,
+        recorded_by: 'Staff User'
+      }
+
+      setCashTransactions(prev => [advanceTxn, ...prev])
+      setCashAccounts(prev => prev.map(acc => {
+        if (acc.id === targetAccId) {
+          return { ...acc, balance: (acc.balance || 0) + depositAmount }
+        }
+        return acc
+      }))
+
+      if (!DEMO_MODE) {
+        ;(supabase as any).from('cash_transactions').insert([advanceTxn]).then()
+        const targetAcc = cashAccounts.find(a => a.id === targetAccId)
+        if (targetAcc) {
+          const finalBal = (targetAcc.balance || 0) + depositAmount;
+          ;(supabase as any).from('cash_accounts').update({ balance: finalBal }).eq('id', targetAccId).then()
+        }
+      }
     }
-  }, [applications, beds, rooms, roomTypes])
+
+    if (!DEMO_MODE) {
+      ;(supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then()
+      ;(supabase as any).from('residents').insert([newResident]).then()
+      ;(supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then()
+    }
+  }, [applications, beds, rooms, roomTypes, residents, cashAccounts])
 
   // ── Checkout (frees Bed and moves Resident to Checked Out) ──
   const checkOutResident = useCallback((residentId: string, checkOutDate: string) => {
@@ -732,8 +897,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [residents])
 
-  // ── Vacate Resident (Full Phase 2 checkout settlement) ──
-  const vacateResident = useCallback((params: VacateResidentParams): VacatedResident => {
+  // ── Vacate Resident (Full Phase 2 & Phase 3 Checkout Settlement) ──
+  const vacateResident = useCallback((params: VacateResidentParams): { vacated: VacatedResident; receipt: CheckoutReceipt } => {
     const resident = residents.find(r => r.id === params.residentId)
     if (!resident) {
       throw new Error(`Resident ${params.residentId} not found`)
@@ -755,8 +920,15 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       pin_active: false
     } : r))
 
-    // 3. Create departure record
+    // 3. Generate sequential receipt number
+    const receiptSeq = (checkoutReceipts.length + 1).toString().padStart(4, '0')
+    const receiptNo = `CKR-2026-${receiptSeq}`
+
     const settlementAmt = Math.abs(Number(params.settlementAmount) || 0)
+    const isRefund = params.settlementType === 'refund'
+    const advanceStatus = params.advanceStatus || (isRefund ? 'Returned' : 'Adjusted')
+
+    // 4. Create departure record
     const newDeparture: VacatedResident = {
       id: `vac-${Date.now()}`,
       resident_id: resident.id,
@@ -773,18 +945,49 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       settlement_amount: settlementAmt,
       settlement_type: params.settlementType,
       account_id: params.accountId || null,
+      receipt_no: receiptNo,
+      advance_status: advanceStatus,
+      payment_mode: params.paymentMode || 'cash',
+      rent_breakdown: params.rentBreakdown || [],
+      deductions_breakdown: params.deductionsBreakdown || [],
       processed_by: params.processedBy || 'Admin User',
       created_at: new Date().toISOString()
     }
-
     setVacatedResidents(prev => [newDeparture, ...prev])
 
-    // 4. Post automatically to Cash Book as a transaction
-    // refund = cash out, dues collected = cash in, with resident name and "Vacate settlement"
+    // 5. Create Checkout Receipt record
+    const newReceipt: CheckoutReceipt = {
+      id: `ckr-${Date.now()}`,
+      receipt_no: receiptNo,
+      vacated_id: newDeparture.id,
+      resident_id: resident.id,
+      resident_name: residentName,
+      phone: resident.application?.phone || '—',
+      room_no: roomNo,
+      bed_label: bedLabel,
+      admission_date: resident.check_in_date,
+      checkout_date: params.vacateDate,
+      advance_amount: Number(params.depositAmount) || 0,
+      pending_rent_deducted: Number(params.pendingDues) || 0,
+      other_deductions: Number(params.deductions) || 0,
+      final_refund_amount: settlementAmt,
+      settlement_type: params.settlementType,
+      amount_in_words: numberToWordsINR(settlementAmt),
+      payment_mode: params.paymentMode || 'cash',
+      account_id: params.accountId || null,
+      rent_breakdown: params.rentBreakdown || [],
+      deductions_breakdown: params.deductionsBreakdown || [],
+      notes: params.notes || null,
+      issued_by: params.processedBy || 'Admin User',
+      created_at: new Date().toISOString()
+    }
+    setCheckoutReceipts(prev => [newReceipt, ...prev])
+
+    // 6. Post automatically to Cash Book as a transaction
+    // "with the resident name and 'Checkout settlement'"
     if (settlementAmt > 0 && params.accountId) {
-      const isRefund = params.settlementType === 'refund'
       const direction: CashDirection = isRefund ? 'out' : 'in'
-      const note = `${residentName} - Vacate settlement`
+      const note = `${residentName} - Checkout settlement`
 
       const newTxn: CashTransaction = {
         id: `ct-vac-${Date.now()}`,
@@ -821,19 +1024,20 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 5. Remote Supabase sync
+    // 7. Remote Supabase sync
     if (!DEMO_MODE) {
-      (supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
-      (supabase as any).from('residents').update({
+      ;(supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
+      ;(supabase as any).from('residents').update({
         status: 'vacated',
         check_out_date: params.vacateDate,
         pin_active: false
       }).eq('id', resident.id).then()
-      (supabase as any).from('vacated_residents').insert([newDeparture]).then()
+      ;(supabase as any).from('vacated_residents').insert([newDeparture]).then()
+      ;(supabase as any).from('checkout_receipts').insert([newReceipt]).then()
     }
 
-    return newDeparture
-  }, [residents, rooms, cashAccounts])
+    return { vacated: newDeparture, receipt: newReceipt }
+  }, [residents, rooms, cashAccounts, checkoutReceipts])
 
   // ── PIN Reset ──
   const resetResidentPin = useCallback((residentId: string, newPin?: string): string => {
@@ -1267,11 +1471,15 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       staffList,
       acRooms: acRoomsState,
       vacatedResidents,
+      checkoutReceipts,
+      checkoutRentRule,
+      setCheckoutRentRule,
       dashboardStats,
       publicRoomOptions,
       rentDueList,
       addApplication,
       updateApplicationStatus,
+      updateApplicationDetails,
       allocateBed,
       checkOutResident,
       vacateResident,

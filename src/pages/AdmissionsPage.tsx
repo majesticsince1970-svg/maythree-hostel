@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useDemoData } from '@/contexts/DemoDataContext'
 import { ApplicationsPage } from '@/pages/ApplicationsPage'
 import { RoomsPage } from '@/pages/RoomsPage'
 import { VacateResidentManager } from '@/components/VacateResidentManager'
+import { AdmissionQrCard } from '@/components/AdmissionQrCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,8 +18,13 @@ export function AdmissionsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { addToast } = useToast()
+  const { applications } = useDemoData()
   const currentTab = searchParams.get('tab') || 'applications'
   const [copied, setCopied] = useState(false)
+
+  const pendingVerificationCount = applications.filter(
+    a => a.status === 'submitted' || a.status === 'under_review'
+  ).length
 
   const publicApplyUrl = `${window.location.origin}/apply`
 
@@ -76,6 +83,11 @@ export function AdmissionsPage() {
         >
           <ClipboardList className="h-4 w-4 mr-1.5" />
           New Admissions
+          {pendingVerificationCount > 0 && (
+            <Badge variant="destructive" className="ml-1.5 px-1.5 py-0 text-[10px] h-4">
+              {pendingVerificationCount}
+            </Badge>
+          )}
         </Button>
         <Button
           variant={currentTab === 'rooms' ? 'default' : 'ghost'}
@@ -110,48 +122,7 @@ export function AdmissionsPage() {
       {currentTab === 'applications' && <ApplicationsPage />}
       {currentTab === 'rooms' && <RoomsPage />}
       {currentTab === 'vacate' && <VacateResidentManager />}
-      {currentTab === 'qr' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <QrCode className="h-5 w-5 text-primary" />
-              Public QR Admission Portal
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Prospective students and working women can scan this QR code or use the link below to apply for hostel admission directly from their mobile phones.
-            </p>
-            <div className="p-6 bg-muted/40 rounded-xl border flex flex-col sm:flex-row items-center gap-6 justify-center">
-              <div className="p-4 bg-white rounded-xl border shadow-sm text-center">
-                <div className="w-44 h-44 bg-neutral-900 rounded-lg flex flex-col items-center justify-center text-white p-3">
-                  <QrCode className="w-24 h-24 text-white mb-2" />
-                  <span className="text-[10px] font-mono tracking-widest text-neutral-300">SCAN TO APPLY</span>
-                </div>
-              </div>
-              <div className="space-y-3 text-center sm:text-left">
-                <div>
-                  <h4 className="font-semibold text-base">MayThree Admission Form</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">{publicApplyUrl}</p>
-                </div>
-                <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                  <Button size="sm" onClick={handleCopyLink}>
-                    {copied ? <Check className="h-4 w-4 mr-1.5" /> : <Copy className="h-4 w-4 mr-1.5" />}
-                    {copied ? 'Link Copied!' : 'Copy Form URL'}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => window.open('/apply', '_blank')}>
-                    <ExternalLink className="h-4 w-4 mr-1.5" />
-                    Open Form in New Tab
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Applications submitted here appear instantly in the <strong>New Admissions</strong> tab for staff verification.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {currentTab === 'qr' && <AdmissionQrCard />}
     </div>
   )
 }

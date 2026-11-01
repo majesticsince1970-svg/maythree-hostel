@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useDemoData } from '@/contexts/DemoDataContext'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, BedDouble, Users, Clock,
@@ -120,8 +122,13 @@ const navModules: NavModule[] = [
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { profile, signOut } = useAuth()
+  const { applications } = useDemoData()
   const location = useLocation()
   const navigate = useNavigate()
+
+  const pendingVerificationCount = applications.filter(
+    a => a.status === 'submitted' || a.status === 'under_review'
+  ).length
 
   const filteredModules = navModules.filter(m => profile && m.roles.includes(profile.role))
 
@@ -195,11 +202,18 @@ export function Layout() {
                       <Icon className={cn("h-4 w-4 shrink-0 transition-transform group-hover:scale-110", active ? "text-primary-foreground" : "text-muted-foreground")} />
                       <span className="truncate">{module.label}</span>
                     </div>
-                    {module.subItems && (
-                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md", active ? "bg-primary-foreground/20 text-primary-foreground" : "text-muted-foreground/60")}>
-                        {module.subItems.length}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {module.id === 'admissions' && pendingVerificationCount > 0 && (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 shadow-sm animate-pulse">
+                          {pendingVerificationCount}
+                        </Badge>
+                      )}
+                      {module.subItems && (
+                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md", active ? "bg-primary-foreground/20 text-primary-foreground" : "text-muted-foreground/60")}>
+                          {module.subItems.length}
+                        </span>
+                      )}
+                    </div>
                   </Link>
 
                   {/* Sub-item Quick Links for active modules */}
@@ -207,15 +221,23 @@ export function Layout() {
                     <div className="pl-6 pr-1 py-1 space-y-1 border-l-2 border-primary/30 ml-4 my-1">
                       {module.subItems.map((sub) => {
                         const SubIcon = sub.icon
+                        const isNewAdmissions = sub.path.includes('tab=applications')
                         return (
                           <Link
                             key={sub.path}
                             to={sub.path}
                             onClick={() => setSidebarOpen(false)}
-                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
                           >
-                            {SubIcon && <SubIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                            <span className="truncate">{sub.label}</span>
+                            <div className="flex items-center gap-2 truncate">
+                              {SubIcon && <SubIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              <span className="truncate">{sub.label}</span>
+                            </div>
+                            {isNewAdmissions && pendingVerificationCount > 0 && (
+                              <Badge variant="destructive" className="text-[9px] px-1 py-0 h-3.5">
+                                {pendingVerificationCount}
+                              </Badge>
+                            )}
                           </Link>
                         )
                       })}

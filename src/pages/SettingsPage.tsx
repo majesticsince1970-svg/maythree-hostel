@@ -23,6 +23,7 @@ export function SettingsPage() {
     updateRoomType,
     addStaff, updateStaff, removeStaff,
     updateRoomConfig, addBedToRoom, removeBedFromRoom, toggleRoomAC,
+    checkoutRentRule, setCheckoutRentRule,
   } = useDemoData()
   const { addToast } = useToast()
   const [tab, setTab] = useState('rooms')
@@ -165,6 +166,7 @@ export function SettingsPage() {
           <TabsTrigger value="rooms">Room Types & Rents</TabsTrigger>
           <TabsTrigger value="room_config">Room Config</TabsTrigger>
           <TabsTrigger value="staff">Staff Accounts</TabsTrigger>
+          <TabsTrigger value="checkout_rules">Checkout Rules</TabsTrigger>
           <TabsTrigger value="qr">QR Code</TabsTrigger>
         </TabsList>
 
@@ -356,6 +358,87 @@ export function SettingsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Checkout Settlement Rules */}
+        <TabsContent value="checkout_rules">
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Settings className="h-5 w-5 text-primary" /> Checkout Settlement & Rent Calculation Rules
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold mb-1">Current Month Rent Rule on Checkout</h4>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Controls how the system automatically calculates the rent for the month in which a resident vacates.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    onClick={() => {
+                      setCheckoutRentRule('per_day')
+                      addToast({ type: 'success', title: 'Rule updated', description: 'Rent rule set to Per-day pro-rata' })
+                    }}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all space-y-2 ${
+                      checkoutRentRule === 'per_day'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-muted hover:border-muted-foreground/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm">Per-Day Pro-Rata (Days Stayed)</span>
+                      {checkoutRentRule === 'per_day' && (
+                        <Badge variant="default" className="text-[10px]">Active Rule</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Calculates daily rate = Monthly Rent / Days in Month, then multiplies by the exact number of days stayed up to the checkout date.
+                    </p>
+                    <div className="text-[11px] font-mono bg-muted/60 p-2 rounded text-muted-foreground">
+                      Example: ₹6,500 / 30 days × 12 days = ₹2,600
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setCheckoutRentRule('full_month')
+                      addToast({ type: 'success', title: 'Rule updated', description: 'Rent rule set to Full month rent' })
+                    }}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all space-y-2 ${
+                      checkoutRentRule === 'full_month'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-muted hover:border-muted-foreground/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm">Full Month's Rent</span>
+                      {checkoutRentRule === 'full_month' && (
+                        <Badge variant="default" className="text-[10px]">Active Rule</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Charges the resident for the full calendar month regardless of the day of departure.
+                    </p>
+                    <div className="text-[11px] font-mono bg-muted/60 p-2 rounded text-muted-foreground">
+                      Example: Checking out on 12th = Full ₹6,500 due
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted/40 rounded-xl border space-y-2 text-xs">
+                <h5 className="font-semibold">Automatic Checkout Settlement Posting</h5>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li><strong>Security Deposit:</strong> Held advance is applied against unpaid rent and itemized deductions (damages, store dues).</li>
+                  <li><strong>Refunds:</strong> Net positive amounts post automatically as Cash OUT to the Cash Book.</li>
+                  <li><strong>Collections:</strong> Net negative amounts post automatically as Cash IN to the Cash Book.</li>
+                  <li><strong>Official Receipts:</strong> A sequential numbered receipt (CKR-2026-XXXX) with dual signatures is generated and saved.</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

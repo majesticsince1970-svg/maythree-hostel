@@ -49,3 +49,4 @@ BEGIN
     CREATE POLICY "Staff can insert vacated_residents" ON vacated_residents FOR INSERT TO authenticated WITH CHECK (true);
   END IF;
 END $$;
+

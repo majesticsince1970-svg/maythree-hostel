@@ -1,13 +1,17 @@
 import { useState, useMemo } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { formatCurrency } from '@/lib/utils'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { CheckoutReceiptModal } from '@/components/CheckoutReceiptModal'
+import type { CheckoutReceipt } from '@/types/database'
 import {
   BarChart3, Download, TrendingUp, TrendingDown, IndianRupee,
-  Utensils, BedDouble, ShoppingBag, PieChart
+  Utensils, BedDouble, ShoppingBag, PieChart, Printer, Search,
+  ReceiptText, FileSpreadsheet
 } from 'lucide-react'
 
 function exportToCsv(data: Record<string, unknown>[], filename: string) {
@@ -31,8 +35,22 @@ function exportToCsv(data: Record<string, unknown>[], filename: string) {
 }
 
 export function ReportsPage() {
-  const { residents, payments, expenses, products, sales, cashAccounts, beds, expenseCategories } = useDemoData()
+  const {
+    residents,
+    payments,
+    expenses,
+    products,
+    sales,
+    cashAccounts,
+    beds,
+    expenseCategories,
+    checkoutReceipts
+  } = useDemoData()
   const [selectedMonth, setSelectedMonth] = useState('2026-10')
+  const [activeTab, setActiveTab] = useState<'financials' | 'checkout_receipts'>('financials')
+  const [receiptSearch, setReceiptSearch] = useState('')
+  const [selectedReceipt, setSelectedReceipt] = useState<CheckoutReceipt | null>(null)
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
 
   // Rent Income in selected month
   const rentIncome = useMemo(() =>
@@ -126,25 +144,99 @@ export function ReportsPage() {
     exportToCsv(reportData, `hostel_financial_report_${selectedMonth}`)
   }
 
+  // Filtered Checkout Receipts
+  const filteredReceipts = useMemo(() => {
+    const q = receiptSearch.toLowerCase().trim()
+    if (!q) return checkoutReceipts
+    return checkoutReceipts.filter(r =>
+      r.receipt_no.toLowerCase().includes(q) ||
+      r.resident_name.toLowerCase().includes(q) ||
+      r.room_no.toLowerCase().includes(q) ||
+      r.issued_by.toLowerCase().includes(q) ||
+      (r.phone && r.phone.toLowerCase().includes(q))
+    )
+  }, [checkoutReceipts, receiptSearch])
+
+  const handleExportReceiptsCSV = () => {
+    const data = filteredReceipts.map(r => ({
+      'Receipt No': r.receipt_no,
+      'Resident Name': r.resident_name,
+      'Phone': r.phone || '',
+      'Room No': r.room_no,
+      'Bed': r.bed_label,
+      'Admission Date': r.admission_date,
+      'Checkout Date': r.checkout_date,
+      'Advance Deposit': r.advance_amount,
+      'Pending Rent Deducted': r.pending_rent_deducted,
+      'Other Deductions': r.other_deductions,
+      'Final Settlement Amount': r.final_refund_amount,
+      'Settlement Type': r.settlement_type,
+      'Payment Mode': r.payment_mode,
+      'Issued By': r.issued_by,
+      'Date Issued': r.created_at
+    }))
+    exportToCsv(data, `checkout_settlement_receipts_${new Date().toISOString().slice(0, 10)}`)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Financial & Operational Reports</h1>
-          <p className="text-muted-foreground text-sm">Verified real-time hostel metrics and P&L summary</p>
+          <p className="text-muted-foreground text-sm">Verified real-time hostel metrics, P&L summary, and checkout receipts</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-auto h-9 text-sm"
-          />
-          <Button variant="outline" size="sm" onClick={handleExportCSV}>
-            <Download className="h-4 w-4 mr-2" /> Export Report (CSV)
+        {activeTab === 'financials' ? (
+          <div className="flex items-center gap-3">
+            <Input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-auto h-9 text-sm"
+            />
+            <Button variant="outline" size="sm" onClick={handleExportCSV}>
+              <Download className="h-4 w-4 mr-2" /> Export Report (CSV)
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={handleExportReceiptsCSV}>
+            <Download className="h-4 w-4 mr-2" /> Export All Receipts (CSV)
           </Button>
-        </div>
+        )}
       </div>
+
+      {/* Module Tabs */}
+      <div className="flex border-b space-x-6">
+        <button
+          onClick={() => setActiveTab('financials')}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'financials'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <BarChart3 className="h-4 w-4" />
+          Financial & Operating P&L
+        </button>
+        <button
+          onClick={() => setActiveTab('checkout_receipts')}
+          className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'checkout_receipts'
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ReceiptText className="h-4 w-4" />
+          Checkout Settlement Receipts
+          {checkoutReceipts.length > 0 && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
+              {checkoutReceipts.length}
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'financials' ? (
+        <>
 
       {/* Monthly P&L Overview */}
       <Card className="border-2 shadow-sm">
@@ -334,6 +426,137 @@ export function ReportsPage() {
           )}
         </CardContent>
       </Card>
+        </>
+      ) : (
+        /* Checkout Receipts Tab */
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <ReceiptText className="h-5 w-5 text-primary" />
+                  All Checkout Settlement Receipts
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Central archive of all resident checkout receipts. Click "Print / View" to reprint A4/A5 receipts or export as PDF.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs w-fit">
+                {filteredReceipts.length} Receipts
+              </Badge>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-4 space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search receipts by receipt #, resident name, room, or staff..."
+                value={receiptSearch}
+                onChange={e => setReceiptSearch(e.target.value)}
+                className="pl-8 text-xs h-9"
+              />
+            </div>
+
+            {/* Receipts Table */}
+            <div className="border rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow className="text-[11px]">
+                    <TableHead className="h-8">Receipt #</TableHead>
+                    <TableHead className="h-8">Resident Name</TableHead>
+                    <TableHead className="h-8">Room / Bed</TableHead>
+                    <TableHead className="h-8">Checkout Date</TableHead>
+                    <TableHead className="h-8 text-right">Advance</TableHead>
+                    <TableHead className="h-8 text-right">Rent Ded.</TableHead>
+                    <TableHead className="h-8 text-right">Other Ded.</TableHead>
+                    <TableHead className="h-8 text-right">Final Settlement</TableHead>
+                    <TableHead className="h-8">Payment Mode</TableHead>
+                    <TableHead className="h-8">Issued By</TableHead>
+                    <TableHead className="h-8 text-center">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReceipts.length > 0 ? (
+                    filteredReceipts.map(r => (
+                      <TableRow key={r.id} className="text-xs hover:bg-muted/30">
+                        <TableCell className="font-mono font-bold text-primary text-[11px]">
+                          {r.receipt_no}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <div>
+                            <span>{r.resident_name}</span>
+                            {r.phone && (
+                              <span className="block text-[10px] text-muted-foreground font-mono">
+                                {r.phone}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-[11px]">
+                          Room {r.room_no} · {r.bed_label}
+                        </TableCell>
+                        <TableCell className="text-[11px]">
+                          {formatDate(r.checkout_date)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[11px] text-emerald-600">
+                          {formatCurrency(r.advance_amount)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[11px] text-rose-600">
+                          - {formatCurrency(r.pending_rent_deducted)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[11px] text-rose-600">
+                          - {formatCurrency(r.other_deductions)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-xs">
+                          <span className={r.settlement_type === 'refund' ? 'text-emerald-600' : 'text-rose-600'}>
+                            {r.settlement_type === 'refund' ? 'Refund ' : 'Collected '}
+                            {formatCurrency(r.final_refund_amount)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-[11px] uppercase font-mono">
+                          {r.payment_mode}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-[11px]">
+                          {r.issued_by}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedReceipt(r)
+                              setIsReceiptModalOpen(true)
+                            }}
+                            className="h-7 text-[11px] gap-1 px-2"
+                          >
+                            <Printer className="h-3 w-3" />
+                            Print / View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={11} className="h-24 text-center text-muted-foreground text-xs">
+                        No checkout receipts recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Checkout Receipt Modal for Reprinting */}
+      <CheckoutReceiptModal
+        receipt={selectedReceipt}
+        open={isReceiptModalOpen}
+        onClose={() => setIsReceiptModalOpen(false)}
+      />
     </div>
   )
 }
