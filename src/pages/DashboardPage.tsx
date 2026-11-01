@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
 import {
   BedDouble, Users, UserPlus, ClipboardList, IndianRupee,
   TrendingUp, AlertTriangle, ShoppingCart, Wallet, ArrowRight
@@ -28,7 +29,7 @@ export function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Hostel Operations Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Real-time overview of MayThree Women's Hostel</p>
+          <p className="text-muted-foreground text-sm">Real-time overview of {BRAND.name}</p>
         </div>
       </div>
 

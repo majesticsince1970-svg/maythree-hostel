@@ -15,6 +15,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/ui/loading'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
+import { PrintTemplate } from '@/components/PrintTemplate'
+import { numberToWordsINR } from '@/lib/numberToWords'
 import {
   Plus, Phone, MessageCircle, Printer, Search, IndianRupee,
   Download, Banknote, CreditCard, Landmark, ShoppingBag
@@ -530,59 +533,93 @@ export function PaymentsPage() {
         </form>
       </Dialog>
 
-      {/* Official Receipt Dialog */}
+      {/* Official Rent Receipt Dialog (A4 Printable) */}
       <Dialog open={!!receiptPayment} onClose={() => setReceiptPayment(null)}>
-        {receiptPayment && (
-          <div className="space-y-4">
-            <div className="text-center pb-2 border-b">
-              <h2 className="text-lg font-bold">MayThree Women's Hostel</h2>
-              <p className="text-xs text-muted-foreground">Official Rent Receipt</p>
-              <p className="text-xs font-mono font-semibold text-primary mt-1">{receiptPayment.receipt_no}</p>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Resident:</span>
-                <span className="font-semibold">{residents.find(r => r.id === receiptPayment.resident_id)?.application?.full_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Room & Bed:</span>
-                <span>Room {residents.find(r => r.id === receiptPayment.resident_id)?.bed?.room?.room_no} (Bed {residents.find(r => r.id === receiptPayment.resident_id)?.bed?.bed_label})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Rent Period:</span>
-                <span className="font-medium">{receiptPayment.period_month}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Payment Mode:</span>
-                <span className="uppercase font-semibold">{receiptPayment.mode}</span>
-              </div>
-              {receiptPayment.reference && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Reference / UTR:</span>
-                  <span className="font-mono text-xs">{receiptPayment.reference}</span>
+        {receiptPayment && (() => {
+          const res = residents.find(r => r.id === receiptPayment.resident_id)
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between no-print border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-sm text-primary">Rent Payment Voucher</h3>
+                  <p className="text-[11px] text-muted-foreground">{receiptPayment.receipt_no}</p>
                 </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Payment Date:</span>
-                <span>{formatDate(receiptPayment.paid_on)}</span>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white"
+                    onClick={() => window.print()}
+                  >
+                    <Printer className="h-3.5 w-3.5 mr-1.5" /> Print A4 Receipt
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setReceiptPayment(null)}>
+                    Close
+                  </Button>
+                </div>
               </div>
-              <div className="flex justify-between pt-2 border-t text-base font-bold text-primary">
-                <span>Amount Received:</span>
-                <span>{formatCurrency(receiptPayment.amount)}</span>
+
+              {/* Printable Document Payload */}
+              <div className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
+                <PrintTemplate
+                  documentTitle="OFFICIAL RENT PAYMENT VOUCHER"
+                  referenceNo={receiptPayment.receipt_no}
+                  date={formatDate(receiptPayment.paid_on)}
+                  guestDetails={{
+                    name: res?.application?.full_name || 'Resident',
+                    phone: res?.application?.phone || '—',
+                    roomBed: `Room ${res?.bed?.room?.room_no || '—'} · Bed ${res?.bed?.bed_label || 'A'}`,
+                    admissionDate: res?.check_in_date ? formatDate(res.check_in_date) : undefined,
+                    duration: `Month: ${receiptPayment.period_month}`,
+                  }}
+                  signatoryName={profile?.name || 'Authorised Staff'}
+                  declarationText="Payment received in full and credited to resident ledger. This is a computer generated official acknowledgement."
+                  termsNote={`Mode of payment: ${receiptPayment.mode.toUpperCase()}${receiptPayment.reference ? ` · Ref: ${receiptPayment.reference}` : ''}`}
+                >
+                  <table className="w-full text-xs border border-neutral-300">
+                    <thead>
+                      <tr className="bg-[#10375C]/10 border-b border-neutral-300 text-neutral-900">
+                        <th className="p-2.5 text-left font-bold w-12 text-center">S.No</th>
+                        <th className="p-2.5 text-left font-bold">Particulars / Description</th>
+                        <th className="p-2.5 text-left font-bold w-32">Billing Period</th>
+                        <th className="p-2.5 text-right font-bold w-32">Amount (INR)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200">
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">1</td>
+                        <td className="p-2.5 font-medium">
+                          Hostel Accommodation & Facilities Rent
+                          <span className="block text-[10px] text-neutral-500 font-normal">
+                            Room {res?.bed?.room?.room_no} (Bed {res?.bed?.bed_label})
+                          </span>
+                        </td>
+                        <td className="p-2.5 font-mono text-neutral-700">{receiptPayment.period_month}</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-neutral-900">
+                          {formatCurrency(receiptPayment.amount)}
+                        </td>
+                      </tr>
+                      <tr className="bg-[#10375C]/10 border-t-2 border-neutral-900 font-bold text-sm">
+                        <td colSpan={3} className="p-2.5 text-right text-neutral-900">
+                          TOTAL AMOUNT RECEIVED:
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-black text-[#10375C]">
+                          {formatCurrency(receiptPayment.amount)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div className="p-3 bg-neutral-100 rounded text-xs">
+                    <span className="text-neutral-500 font-semibold block text-[10px] uppercase">Amount in Words:</span>
+                    <p className="font-bold text-neutral-900 uppercase font-mono">
+                      {numberToWordsINR(receiptPayment.amount)}
+                    </p>
+                  </div>
+                </PrintTemplate>
               </div>
             </div>
-
-            <DialogFooter className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => window.print()}>
-                <Printer className="h-4 w-4 mr-1.5" /> Print
-              </Button>
-              <Button className="flex-1" onClick={() => setReceiptPayment(null)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
+          )
+        })()}
       </Dialog>
     </div>
   )

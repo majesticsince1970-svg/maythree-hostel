@@ -471,7 +471,7 @@ export function SettingsPage() {
                     img.onload = () => {
                       ctx?.drawImage(img, 0, 0, 400, 400)
                       const a = document.createElement('a')
-                      a.download = 'maythree-hostel-qr.png'
+                      a.download = 'mythree-hostel-qr.png'
                       a.href = canvas.toDataURL('image/png')
                       a.click()
                     }
@@ -530,7 +530,7 @@ export function SettingsPage() {
           </div>
           <div>
             <Label>Email *</Label>
-            <Input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="name@maythree.com" className="mt-1" />
+            <Input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="name@mythreehostels.com" className="mt-1" />
           </div>
           <div>
             <Label>Password *</Label>

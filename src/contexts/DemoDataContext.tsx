@@ -399,9 +399,9 @@ const initStockMovements: StockMovement[] = [
 
 // ── Staff ──
 const initStaff: StaffProfile[] = [
-  { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@maythree.com' },
-  { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@maythree.com' },
-  { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@maythree.com' },
+  { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' },
+  { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' },
+  { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' },
 ]
 
 // Helper to safely read from localStorage

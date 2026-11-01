@@ -144,7 +144,7 @@ export function CashPage() {
       Source: t.source.replace('_', ' ').toUpperCase(),
       Description: t.note
     }))
-    exportToCsv(exportData, `MayThree_Ledger_${selectedAccountFilter}_${new Date().toISOString().split('T')[0]}`)
+    exportToCsv(exportData, `Mythree_Ledger_${selectedAccountFilter}_${new Date().toISOString().split('T')[0]}`)
     addToast({ type: 'success', title: 'Ledger Exported', description: `${exportData.length} transactions exported to Excel/CSV.` })
   }
 

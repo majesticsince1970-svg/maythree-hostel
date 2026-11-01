@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { formatCurrency } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
+import { MythreeLogo } from '@/components/MythreeLogo'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2 } from 'lucide-react'
 
@@ -118,12 +120,16 @@ export function ApplyPage() {
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
       <div className="max-w-lg mx-auto px-4 py-6">
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Building2 className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold">MayThree Hostel</h1>
+        <div className="text-center mb-6 space-y-1">
+          <div className="flex justify-center mb-2">
+            <MythreeLogo variant="full" size="md" color="#10375C" />
           </div>
-          <p className="text-muted-foreground text-sm">Women's Hostel Admission Form</p>
+          <p className="text-xs text-muted-foreground font-medium">
+            {BRAND.address.full}
+          </p>
+          <p className="text-xs text-primary font-mono font-semibold">
+            Contact: {BRAND.contacts.phoneFormatted}
+          </p>
         </div>
 
         {/* Progress */}

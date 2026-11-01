@@ -5,6 +5,8 @@ import { useDemoData } from '@/contexts/DemoDataContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
+import { MythreeLogo } from '@/components/MythreeLogo'
 import {
   LayoutDashboard, BedDouble, Users, Clock,
   Landmark, Store, BarChart3, Settings,
@@ -144,37 +146,28 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Header */}
-      <div className="lg:hidden flex items-center justify-between p-4 border-b bg-card">
+      {/* Mobile Header (Hidden in print) */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b bg-card no-print">
         <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-muted">
           <Menu className="h-6 w-6" />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <Building2 className="h-4 w-4" />
-          </div>
-          <h1 className="font-bold text-base">MayThree Hostel</h1>
-        </div>
+        <Link to="/dashboard" className="flex items-center">
+          <MythreeLogo variant="horizontal" size="sm" />
+        </Link>
         <div className="w-8" />
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar (Hidden in print) */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col justify-between transform transition-transform duration-200 ease-in-out lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col justify-between transform transition-transform duration-200 ease-in-out lg:translate-x-0 no-print",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div>
           {/* Brand header */}
           <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
-                <Building2 className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="font-extrabold text-base tracking-tight block">MayThree</span>
-                <span className="text-[11px] text-muted-foreground block -mt-0.5">Hostel Operations</span>
-              </div>
-            </div>
+            <Link to="/dashboard" onClick={() => setSidebarOpen(false)} className="flex items-center gap-2">
+              <MythreeLogo variant="horizontal" size="md" />
+            </Link>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
               <X className="h-5 w-5" />
             </button>
@@ -274,12 +267,12 @@ export function Layout() {
 
       {/* Backdrop overlay for mobile */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-xs" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-xs no-print" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main App Content */}
-      <main className="lg:ml-64 min-h-screen">
-        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+      <main className="lg:ml-64 min-h-screen print:ml-0 print:min-h-0">
+        <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto print:p-0 print:max-w-none">
           <Outlet />
         </div>
       </main>

@@ -63,3 +63,4 @@ export function numberToWordsINR(amount: number): string {
   const words = parts.join(' ').trim()
   return `Rupees ${words} Only`
 }
+

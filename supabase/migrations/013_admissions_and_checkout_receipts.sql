@@ -55,3 +55,4 @@ BEGIN
     CREATE POLICY "Staff can insert checkout_receipts" ON checkout_receipts FOR INSERT TO authenticated WITH CHECK (true);
   END IF;
 END $$;
+

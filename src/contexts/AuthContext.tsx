@@ -21,17 +21,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
 
 const DEMO_USERS: Record<string, { password: string; profile: StaffProfile }> = {
+  'admin@mythreehostels.com': {
+    password: 'admin123',
+    profile: { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' }
+  },
+  'staff@mythreehostels.com': {
+    password: 'staff123',
+    profile: { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' }
+  },
+  'store@mythreehostels.com': {
+    password: 'store123',
+    profile: { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' }
+  },
+  // Legacy aliases for backward compatibility
   'admin@maythree.com': {
     password: 'admin123',
-    profile: { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@maythree.com' }
+    profile: { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' }
   },
   'staff@maythree.com': {
     password: 'staff123',
-    profile: { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@maythree.com' }
+    profile: { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' }
   },
   'store@maythree.com': {
     password: 'store123',
-    profile: { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@maythree.com' }
+    profile: { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' }
   }
 }
 

@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
+import { PrintTemplate } from '@/components/PrintTemplate'
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard,
   Banknote, Printer, Sparkles, User, Receipt, CheckCircle2
@@ -448,54 +450,84 @@ export function StorePOSPage() {
         </CardContent>
       </Card>
 
-      {/* Itemized Sale Receipt Modal */}
+      {/* Itemized Sale Receipt Modal (A4 Printable) */}
       <Dialog open={showReceipt} onClose={() => setShowReceipt(false)}>
         {completedReceipt && (
           <div className="space-y-4">
-            <div className="text-center pb-2 border-b">
-              <h2 className="text-lg font-bold text-foreground">MayThree Hostel Store</h2>
-              <p className="text-xs text-muted-foreground">Order #{completedReceipt.id}</p>
-              <p className="text-xs text-muted-foreground">{completedReceipt.date} · {completedReceipt.residentName}</p>
-            </div>
-
-            <div className="max-h-60 overflow-y-auto space-y-2 border-b pb-3">
-              {completedReceipt.items.map((it, idx) => (
-                <div key={idx} className="flex justify-between text-xs">
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{it.product.name}</p>
-                    <p className="text-muted-foreground">{it.qty} × {formatCurrency(it.product.selling_price)}</p>
-                  </div>
-                  <span className="font-semibold">{formatCurrency(it.qty * it.product.selling_price)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-1.5 bg-muted/30 p-3 rounded-lg text-sm">
-              <div className="flex justify-between text-muted-foreground text-xs">
-                <span>Payment Method</span>
-                <span className="uppercase font-semibold text-foreground">{completedReceipt.mode}</span>
+            <div className="flex items-center justify-between no-print border-b pb-2">
+              <div>
+                <h3 className="font-bold text-sm text-primary">Store POS Sale Voucher</h3>
+                <p className="text-[11px] text-muted-foreground">Order #{completedReceipt.id.slice(-8)}</p>
               </div>
-              <div className="flex justify-between text-base font-bold text-primary pt-1 border-t">
-                <span>Amount Paid</span>
-                <span>{formatCurrency(completedReceipt.total)}</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white font-semibold"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Print A4 Receipt
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowReceipt(false)}>
+                  Close
+                </Button>
               </div>
             </div>
 
-            <DialogFooter className="flex gap-2 sm:gap-0">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => window.print()}
+            {/* Isolated Printable Payload */}
+            <div className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
+              <PrintTemplate
+                documentTitle="STORE POS TAX INVOICE & CASH RECEIPT"
+                referenceNo={`ORD-${completedReceipt.id.slice(-8)}`}
+                date={completedReceipt.date}
+                guestDetails={{
+                  name: completedReceipt.residentName || 'Walk-in Customer',
+                  duration: `Mode: ${completedReceipt.mode.toUpperCase()}`,
+                }}
+                signatoryName="Store Incharge"
+                declarationText="Goods sold are inspected and delivered in satisfactory condition. Keep this receipt for any store queries."
+                termsNote={`Payment Mode: ${completedReceipt.mode.toUpperCase()}`}
               >
-                <Printer className="h-4 w-4 mr-1.5" /> Print Receipt
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={() => setShowReceipt(false)}
-              >
-                Done
-              </Button>
-            </DialogFooter>
+                <table className="w-full text-xs border border-neutral-300">
+                  <thead>
+                    <tr className="bg-[#10375C]/10 border-b border-neutral-300 text-neutral-900">
+                      <th className="p-2.5 text-center font-bold w-12">S.No</th>
+                      <th className="p-2.5 text-left font-bold">Item Description</th>
+                      <th className="p-2.5 text-center font-bold w-20">Qty</th>
+                      <th className="p-2.5 text-right font-bold w-28">Rate</th>
+                      <th className="p-2.5 text-right font-bold w-28">Total (INR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200">
+                    {completedReceipt.items.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2.5 text-center font-mono">{idx + 1}</td>
+                        <td className="p-2.5 font-medium text-neutral-900">
+                          {it.product.name}
+                          <span className="block text-[10px] text-neutral-500 font-normal">
+                            Category: {it.product.category || 'General'}
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-center font-mono">{it.qty}</td>
+                        <td className="p-2.5 text-right font-mono text-neutral-700">
+                          {formatCurrency(it.product.selling_price)}
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-neutral-900">
+                          {formatCurrency(it.qty * it.product.selling_price)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[#10375C]/10 border-t-2 border-neutral-900 font-bold text-sm">
+                      <td colSpan={4} className="p-2.5 text-right text-neutral-900">
+                        TOTAL AMOUNT PAID:
+                      </td>
+                      <td className="p-2.5 text-right font-mono font-black text-[#10375C]">
+                        {formatCurrency(completedReceipt.total)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </PrintTemplate>
+            </div>
           </div>
         )}
       </Dialog>

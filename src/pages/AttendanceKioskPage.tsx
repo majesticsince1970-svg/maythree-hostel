@@ -4,6 +4,8 @@ import { useDemoData } from '@/contexts/DemoDataContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { BRAND } from '@/lib/brandConfig'
+import { MythreeLogo } from '@/components/MythreeLogo'
 import {
   ArrowLeft, Delete, CheckCircle2, Lock,
   Clock, ShieldAlert, Sparkles, Building2
@@ -99,8 +101,8 @@ export function AttendanceKioskPage() {
           Exit Kiosk
         </Button>
         <div className="flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-primary" />
-          <span className="font-bold text-base tracking-wide">MayThree Entrance Kiosk</span>
+          <MythreeLogo variant="horizontal" size="sm" color="#ffffff" />
+          <span className="font-bold text-sm tracking-wide text-neutral-300">Entrance Kiosk</span>
         </div>
         <div className="flex items-center gap-2 text-neutral-400 font-mono text-sm">
           <Clock className="h-4 w-4 text-primary" />
@@ -206,7 +208,7 @@ export function AttendanceKioskPage() {
 
       {/* Bottom Footer */}
       <div className="text-center text-xs text-neutral-500 border-t border-neutral-900 pt-3">
-        MayThree Women's Hostel · Kiosk Mode · Entrance Station
+        {BRAND.name} · Kiosk Station · {BRAND.address.city}, {BRAND.address.state}
       </div>
     </div>
   )

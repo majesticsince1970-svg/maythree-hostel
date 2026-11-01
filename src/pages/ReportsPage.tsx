@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Dialog } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { BRAND } from '@/lib/brandConfig'
+import { PrintTemplate } from '@/components/PrintTemplate'
 import { CheckoutReceiptModal } from '@/components/CheckoutReceiptModal'
 import type { CheckoutReceipt } from '@/types/database'
 import {
@@ -51,6 +54,7 @@ export function ReportsPage() {
   const [receiptSearch, setReceiptSearch] = useState('')
   const [selectedReceipt, setSelectedReceipt] = useState<CheckoutReceipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
+  const [isPrintFinancialOpen, setIsPrintFinancialOpen] = useState(false)
 
   // Rent Income in selected month
   const rentIncome = useMemo(() =>
@@ -186,15 +190,22 @@ export function ReportsPage() {
           <p className="text-muted-foreground text-sm">Verified real-time hostel metrics, P&L summary, and checkout receipts</p>
         </div>
         {activeTab === 'financials' ? (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Input
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-auto h-9 text-sm"
             />
-            <Button variant="outline" size="sm" onClick={handleExportCSV}>
-              <Download className="h-4 w-4 mr-2" /> Export Report (CSV)
+            <Button
+              size="sm"
+              onClick={() => setIsPrintFinancialOpen(true)}
+              className="bg-[#10375C] hover:bg-[#10375C]/90 text-white font-semibold text-xs h-9"
+            >
+              <Printer className="h-4 w-4 mr-1.5" /> Print A4 P&L Statement
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-9 text-xs">
+              <Download className="h-4 w-4 mr-1.5" /> Export Report (CSV)
             </Button>
           </div>
         ) : (
@@ -557,6 +568,134 @@ export function ReportsPage() {
         open={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
       />
+
+      {/* Monthly Financial & P&L Statement A4 Print Modal */}
+      <Dialog open={isPrintFinancialOpen} onClose={() => setIsPrintFinancialOpen(false)}>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between no-print border-b pb-2">
+            <div>
+              <h3 className="font-bold text-sm text-primary">Monthly Financial & Operations Statement</h3>
+              <p className="text-[11px] text-muted-foreground">Reporting Period: {selectedMonth}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="h-8 text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white font-semibold"
+                onClick={() => window.print()}
+              >
+                <Printer className="h-3.5 w-3.5 mr-1.5" /> Print A4 Statement
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setIsPrintFinancialOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+
+          <div className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
+            <PrintTemplate
+              documentTitle={`MONTHLY FINANCIAL & OPERATIONS STATEMENT (${selectedMonth})`}
+              referenceNo={`FIN-P&L-${selectedMonth}`}
+              signatoryName="Accounts Incharge"
+              declarationText="This statement represents the verified operating revenue, store transactions, expenditures, and occupancy metrics for the specified billing cycle."
+              termsNote="Official institutional statement. Generated from validated general ledger entries."
+            >
+              {/* Income Section */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-[#10375C] border-b pb-1">
+                  1. Operating Revenue & Inflow
+                </h4>
+                <table className="w-full text-xs border border-neutral-300">
+                  <thead className="bg-[#10375C]/10 border-b border-neutral-300">
+                    <tr>
+                      <th className="p-2 text-left font-bold">Particulars / Source</th>
+                      <th className="p-2 text-right font-bold w-36">Amount (INR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200">
+                    <tr>
+                      <td className="p-2">Hostel Accommodation & Bed Rent Collections</td>
+                      <td className="p-2 text-right font-mono font-bold">{formatCurrency(rentIncome)}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2">Store & Canteen Sales Collections</td>
+                      <td className="p-2 text-right font-mono font-bold">{formatCurrency(storeSalesTotal)}</td>
+                    </tr>
+                    <tr className="bg-neutral-100 font-bold border-t">
+                      <td className="p-2">Total Operating Income</td>
+                      <td className="p-2 text-right font-mono font-bold text-emerald-700">
+                        {formatCurrency(rentIncome + storeSalesTotal)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Outgoings Section */}
+              <div className="space-y-2 pt-2">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-[#10375C] border-b pb-1">
+                  2. Operating Expenditures & Outflows
+                </h4>
+                <table className="w-full text-xs border border-neutral-300">
+                  <thead className="bg-[#10375C]/10 border-b border-neutral-300">
+                    <tr>
+                      <th className="p-2 text-left font-bold">Category</th>
+                      <th className="p-2 text-right font-bold w-20">Share</th>
+                      <th className="p-2 text-right font-bold w-36">Amount (INR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200">
+                    <tr>
+                      <td className="p-2">Store Cost of Goods Sold (COGS)</td>
+                      <td className="p-2 text-right text-neutral-500 font-mono">—</td>
+                      <td className="p-2 text-right font-mono">{formatCurrency(costOfGoods)}</td>
+                    </tr>
+                    {expenseBreakdown.map((item) => (
+                      <tr key={item.name}>
+                        <td className="p-2">{item.name}</td>
+                        <td className="p-2 text-right text-neutral-500 font-mono">{item.percentage}%</td>
+                        <td className="p-2 text-right font-mono">{formatCurrency(item.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-neutral-100 font-bold border-t">
+                      <td className="p-2" colSpan={2}>Total Operating Outgoings</td>
+                      <td className="p-2 text-right font-mono font-bold text-rose-700">
+                        {formatCurrency(costOfGoods + totalExpenses)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Net Surplus Box */}
+              <div className="p-3 bg-[#10375C]/10 border-2 border-[#10375C] rounded flex justify-between items-center text-sm font-bold">
+                <span className="text-[#10375C] uppercase">Net Operating Result (Surplus / Deficit):</span>
+                <span className={`font-mono text-base ${grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {formatCurrency(grossProfit)}
+                </span>
+              </div>
+
+              {/* Operational Metrics Audit */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="p-3 border rounded text-xs space-y-1">
+                  <span className="font-bold text-neutral-800 block uppercase text-[10px]">Bed Occupancy Status</span>
+                  <div className="flex justify-between"><span>Total Beds:</span><strong>{totalBeds}</strong></div>
+                  <div className="flex justify-between"><span>Occupied Beds:</span><strong>{occupiedBeds}</strong></div>
+                  <div className="flex justify-between"><span>Vacant Available:</span><strong>{vacantBeds}</strong></div>
+                  <div className="flex justify-between pt-1 border-t text-primary"><span>Occupancy Rate:</span><strong>{occupancyRate}%</strong></div>
+                </div>
+
+                <div className="p-3 border rounded text-xs space-y-1">
+                  <span className="font-bold text-neutral-800 block uppercase text-[10px]">Food & Mess Efficiency</span>
+                  <div className="flex justify-between"><span>Food Purchases:</span><strong>{formatCurrency(foodExpenses)}</strong></div>
+                  <div className="flex justify-between"><span>Active Residents:</span><strong>{activeResidents}</strong></div>
+                  <div className="flex justify-between"><span>Days in Month:</span><strong>{daysInMonth}</strong></div>
+                  <div className="flex justify-between pt-1 border-t text-primary"><span>Cost / Resident / Day:</span><strong>{formatCurrency(Math.round(foodCostPerResident))}</strong></div>
+                </div>
+              </div>
+            </PrintTemplate>
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }
