@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { PrintTemplate } from '@/components/PrintTemplate'
+import { printIsolatedReceipt } from '@/lib/printUtils'
 import { numberToWordsINR } from '@/lib/numberToWords'
 import {
   Plus, Phone, MessageCircle, Printer, Search, IndianRupee,
@@ -62,6 +63,7 @@ export function PaymentsPage() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null)
+  const receiptPrintRef = useRef<HTMLDivElement>(null)
 
   const currentMonth = new Date().toISOString().slice(0, 7)
 
@@ -548,7 +550,13 @@ export function PaymentsPage() {
                   <Button
                     size="sm"
                     className="h-8 text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white"
-                    onClick={() => window.print()}
+                    onClick={() => {
+                      if (receiptPrintRef.current) {
+                        printIsolatedReceipt(receiptPrintRef.current.innerHTML, `Rent-Receipt-${receiptPayment.receipt_no}`)
+                      } else {
+                        window.print()
+                      }
+                    }}
                   >
                     <Printer className="h-3.5 w-3.5 mr-1.5" /> Print A4 Receipt
                   </Button>
@@ -559,7 +567,7 @@ export function PaymentsPage() {
               </div>
 
               {/* Printable Document Payload */}
-              <div className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
+              <div ref={receiptPrintRef} className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
                 <PrintTemplate
                   documentTitle="OFFICIAL RENT PAYMENT VOUCHER"
                   referenceNo={receiptPayment.receipt_no}

@@ -32,7 +32,7 @@ export function ApplicationsPage() {
     updateApplicationDetails,
     allocateBed
   } = useDemoData()
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const { addToast } = useToast()
 
   const isStaff = profile?.role === 'admin' || profile?.role === 'staff'
@@ -407,14 +407,16 @@ export function ApplicationsPage() {
                   <div className="pt-2 border-t flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                     {isPending && isStaff && (
                       <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7 px-2 gap-1"
-                          onClick={() => handleOpenEdit(app)}
-                        >
-                          <Edit className="h-3 w-3" /> Edit
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2 gap-1"
+                            onClick={() => handleOpenEdit(app)}
+                          >
+                            <Edit className="h-3 w-3" /> Edit
+                          </Button>
+                        )}
                         <div className="flex gap-1.5">
                           <Button
                             size="sm"
@@ -545,14 +547,16 @@ export function ApplicationsPage() {
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 {(selectedApp.status === 'submitted' || selectedApp.status === 'under_review') && (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenEdit(selectedApp)}
-                      className="text-xs"
-                    >
-                      <Edit className="h-3.5 w-3.5 mr-1" /> Edit Details
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEdit(selectedApp)}
+                        className="text-xs"
+                      >
+                        <Edit className="h-3.5 w-3.5 mr-1" /> Edit Details
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       size="sm"

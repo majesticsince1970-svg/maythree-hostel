@@ -11,6 +11,14 @@ import type {
   RentBreakdownItem, DeductionItem, CheckoutReceipt
 } from '@/types/database'
 
+import {
+  seedRoomTypes,
+  seedFlats,
+  seedAcRoomIds,
+  generateCompleteHostelData
+} from '@/lib/seedDataGenerator'
+import type { AttendanceMovement } from '@/types/database'
+
 export interface VacateResidentParams {
   residentId: string
   vacateDate: string
@@ -31,147 +39,19 @@ export interface VacateResidentParams {
 }
 
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
-const STORAGE_KEY = 'maythree_hostel_state_v6'
+const STORAGE_KEY = 'mythree_hostel_state_v7'
 
-// ── Room Types ──
-const initialRoomTypes: RoomType[] = [
-  { id: 'rt-1', name: 'Twin Sharing', beds_per_room: 2, rent_per_head: 8000, has_attached_toilet: true, created_at: '2026-01-01' },
-  { id: 'rt-2', name: 'Single Room', beds_per_room: 1, rent_per_head: 10000, has_attached_toilet: true, created_at: '2026-01-01' },
-  { id: 'rt-3', name: '4-Sharing', beds_per_room: 4, rent_per_head: 7000, has_attached_toilet: false, created_at: '2026-01-01' },
-]
-
-// ── Flats ──
-const flats: Flat[] = [
-  { id: 'f-a', code: 'A', bhk: 2, floor: 1 },
-  { id: 'f-b', code: 'B', bhk: 3, floor: 1 },
-  { id: 'f-c', code: 'C', bhk: 3, floor: 1 },
-  { id: 'f-d', code: 'D', bhk: 3, floor: 1 },
-  { id: 'f-e', code: 'E', bhk: 3, floor: 1 },
-  { id: 'f-f', code: 'F', bhk: 2, floor: 1 },
-  { id: 'f-g', code: 'G', bhk: 3, floor: 1 },
-  { id: 'f-h', code: 'H', bhk: 3, floor: 1 },
-  { id: 'f-i', code: 'I', bhk: 3, floor: 1 },
-  { id: 'f-j', code: 'J', bhk: 3, floor: 1 },
-]
-
-// ── AC Rooms (rooms that have AC) ──
-const acRoomIds = new Set(['room-301', 'room-303', 'room-305', 'room-307', 'room-309', 'room-311', 'room-313', 'room-315', 'room-317', 'room-319'])
-
-// ── Generate Rooms and Beds ──
-function generateRoomsAndBeds(rts: RoomType[]) {
-  const rooms: Room[] = []
-  const beds: Bed[] = []
-
-  // Floor 2: Twin sharing (201-219)
-  for (let i = 201; i <= 219; i++) {
-    const roomId = `room-${i}`
-    rooms.push({ id: roomId, room_no: String(i), room_type_id: 'rt-1', flat_id: null, floor: 2, is_active: true, room_type: rts[0] })
-    beds.push(
-      { id: `bed-${i}-A`, room_id: roomId, bed_label: 'A', status: i % 3 === 0 ? 'occupied' : 'available' },
-      { id: `bed-${i}-B`, room_id: roomId, bed_label: 'B', status: i % 4 === 0 ? 'occupied' : i % 5 === 0 ? 'reserved' : 'available' }
-    )
-  }
-
-  // Floor 3: Single rooms (301-319)
-  for (let i = 301; i <= 319; i++) {
-    const roomId = `room-${i}`
-    rooms.push({ id: roomId, room_no: String(i), room_type_id: 'rt-2', flat_id: null, floor: 3, is_active: true, room_type: rts[1] })
-    beds.push({ id: `bed-${i}-A`, room_id: roomId, bed_label: 'A', status: i % 3 === 0 ? 'occupied' : 'available' })
-  }
-
-  // Flats: 4-sharing
-  const flatRoomCounts: Record<string, number> = { A: 2, B: 3, C: 3, D: 3, E: 3, F: 2, G: 3, H: 3, I: 3, J: 3 }
-  for (const flat of flats) {
-    const count = flatRoomCounts[flat.code] || 3
-    for (let r = 1; r <= count; r++) {
-      const roomNo = `${flat.code}${r}`
-      const roomId = `room-${roomNo}`
-      rooms.push({ id: roomId, room_no: roomNo, room_type_id: 'rt-3', flat_id: flat.id, floor: flat.floor, is_active: true, room_type: rts[2], flat: flat })
-      for (const label of ['A', 'B', 'C', 'D']) {
-        const hash = (flat.code.charCodeAt(0) + r + label.charCodeAt(0)) % 7
-        beds.push({ id: `bed-${roomNo}-${label}`, room_id: roomId, bed_label: label, status: hash < 2 ? 'occupied' : hash === 2 ? 'reserved' : 'available' })
-      }
-    }
-  }
-
-  return { rooms, beds }
-}
-
-const { rooms: initRooms, beds: initBeds } = generateRoomsAndBeds(initialRoomTypes)
-
-// ── Applications ──
-const initApplications: Application[] = [
-  {
-    id: 'app-1', ref_no: 'HST-2026-0001', full_name: 'Priya Sharma', dob: '2000-05-15',
-    phone: '9876543210', email: 'priya@email.com', permanent_address: '123 MG Road, Bangalore, Karnataka',
-    occupation: 'Student', institution_or_employer: 'Christ University',
-    id_proof_type: 'Aadhaar', id_proof_no: '1234 5678 9012',
-    emergency_name: 'Raj Sharma', emergency_relation: 'Father', emergency_phone: '9876543211',
-    preferred_room_type_id: 'rt-1', preferred_ac: 'no', status: 'submitted',
-    submitted_at: '2026-10-28T10:30:00', reviewed_by: null, review_note: null, preferred_room_type: initialRoomTypes[0]
-  },
-  {
-    id: 'app-2', ref_no: 'HST-2026-0002', full_name: 'Ananya Reddy', dob: '2001-08-22',
-    phone: '9876543220', email: 'ananya@email.com', permanent_address: '456 Jubilee Hills, Hyderabad, Telangana',
-    occupation: 'Working Professional', institution_or_employer: 'TCS',
-    id_proof_type: 'Aadhaar', id_proof_no: '2345 6789 0123',
-    emergency_name: 'Lakshmi Reddy', emergency_relation: 'Mother', emergency_phone: '9876543221',
-    preferred_room_type_id: 'rt-2', preferred_ac: 'yes', status: 'under_review',
-    submitted_at: '2026-10-27T14:15:00', reviewed_by: null, review_note: null, preferred_room_type: initialRoomTypes[1]
-  },
-  {
-    id: 'app-3', ref_no: 'HST-2026-0003', full_name: 'Kavya Nair', dob: '1999-12-03',
-    phone: '9876543230', email: 'kavya@email.com', permanent_address: '789 Marine Drive, Kochi, Kerala',
-    occupation: 'Student', institution_or_employer: 'BITS Pilani',
-    id_proof_type: 'PAN', id_proof_no: 'ABCPN1234K',
-    emergency_name: 'Suresh Nair', emergency_relation: 'Father', emergency_phone: '9876543231',
-    preferred_room_type_id: 'rt-3', preferred_ac: 'no', status: 'approved',
-    submitted_at: '2026-10-25T09:00:00', reviewed_by: 'demo-staff-1', review_note: 'Documents verified', preferred_room_type: initialRoomTypes[2]
-  },
-  {
-    id: 'app-4', ref_no: 'HST-2026-0004', full_name: 'Deepa Menon', dob: '2002-03-18',
-    phone: '9876543240', email: null, permanent_address: '321 Anna Nagar, Chennai, Tamil Nadu',
-    occupation: 'Student', institution_or_employer: 'IIT Madras',
-    id_proof_type: 'Aadhaar', id_proof_no: '3456 7890 1234',
-    emergency_name: 'Ravi Menon', emergency_relation: 'Father', emergency_phone: '9876543241',
-    preferred_room_type_id: 'rt-1', preferred_ac: 'any', status: 'submitted',
-    submitted_at: '2026-10-29T08:45:00', reviewed_by: null, review_note: null, preferred_room_type: initialRoomTypes[0]
-  },
-  {
-    id: 'app-5', ref_no: 'HST-2026-0005', full_name: 'Sneha Patil', dob: '2001-07-10',
-    phone: '9876543250', email: 'sneha@email.com', permanent_address: '567 FC Road, Pune, Maharashtra',
-    occupation: 'Working Professional', institution_or_employer: 'Infosys',
-    id_proof_type: 'Aadhaar', id_proof_no: '4567 8901 2345',
-    emergency_name: 'Meena Patil', emergency_relation: 'Mother', emergency_phone: '9876543251',
-    preferred_room_type_id: 'rt-2', preferred_ac: 'no', status: 'rejected',
-    submitted_at: '2026-10-20T11:00:00', reviewed_by: 'demo-staff-1', review_note: 'Incomplete documents', preferred_room_type: initialRoomTypes[1]
-  },
-]
-
-// ── Residents (linked to occupied beds) ──
-const initResidents: Resident[] = [
-  {
-    id: 'res-1', application_id: 'app-3', bed_id: 'bed-201-A', check_in_date: '2026-10-01',
-    check_out_date: null, monthly_rent: 8000, deposit_amount: 16000, status: 'active',
-    pin: '1021', pin_active: true,
-    application: initApplications[2],
-    bed: { id: 'bed-201-A', room_id: 'room-201', bed_label: 'A', status: 'occupied', room: initRooms[0] }
-  },
-  {
-    id: 'res-2', application_id: 'app-6', bed_id: 'bed-301-A', check_in_date: '2026-09-15',
-    check_out_date: null, monthly_rent: 10000, deposit_amount: 20000, status: 'active',
-    pin: '2045', pin_active: true,
-    application: { ...initApplications[0], id: 'app-6', full_name: 'Meera Iyer', phone: '9876543260', ref_no: 'HST-2026-0006', occupation: 'Working Professional', institution_or_employer: 'Wipro' },
-    bed: { id: 'bed-301-A', room_id: 'room-301', bed_label: 'A', status: 'occupied', room: initRooms[19] }
-  },
-  {
-    id: 'res-3', application_id: 'app-7', bed_id: 'bed-B1-A', check_in_date: '2026-08-01',
-    check_out_date: null, monthly_rent: 7000, deposit_amount: 14000, status: 'active',
-    pin: '3089', pin_active: true,
-    application: { ...initApplications[0], id: 'app-7', full_name: 'Roshni Das', phone: '9876543270', ref_no: 'HST-2026-0007', occupation: 'Student', institution_or_employer: 'VIT University' },
-    bed: { id: 'bed-B1-A', room_id: 'room-B1', bed_label: 'A', status: 'occupied' }
-  },
-]
+// ── Interconnected Seed Data Generation (169 beds, 75 occupied, 94 vacant, 75 active residents, connected attendance) ──
+const seedData = generateCompleteHostelData(seedRoomTypes)
+const initialRoomTypes: RoomType[] = seedRoomTypes
+const flats: Flat[] = seedFlats
+const acRoomIds: Set<string> = seedAcRoomIds
+const initRooms: Room[] = seedData.rooms
+const initBeds: Bed[] = seedData.beds
+const initApplications: Application[] = seedData.applications
+const initResidents: Resident[] = seedData.residents
+const initPayments: Payment[] = seedData.payments
+const initAttendanceLogs: AttendanceMovement[] = seedData.attendanceLogs
 
 // ── Initial Vacated Residents (Departure Log) ──
 const initVacatedResidents: VacatedResident[] = [
@@ -289,14 +169,6 @@ const initCheckoutReceipts: CheckoutReceipt[] = [
     issued_by: 'Staff User',
     created_at: '2026-09-30T16:00:00Z'
   }
-]
-
-// ── Payments ──
-const initPayments: Payment[] = [
-  { id: 'pay-1', resident_id: 'res-1', period_month: '2026-10', amount: 8000, paid_on: '2026-10-05', mode: 'UPI', reference: 'UPI987213456', received_by: 'demo-staff-1', receipt_no: 'RCT-001' },
-  { id: 'pay-2', resident_id: 'res-2', period_month: '2026-10', amount: 10000, paid_on: '2026-10-03', mode: 'cash', reference: null, received_by: 'demo-staff-1', receipt_no: 'RCT-002' },
-  { id: 'pay-3', resident_id: 'res-2', period_month: '2026-09', amount: 10000, paid_on: '2026-09-05', mode: 'bank', reference: 'NEFT491823', received_by: 'demo-staff-1', receipt_no: 'RCT-003' },
-  { id: 'pay-4', resident_id: 'res-3', period_month: '2026-10', amount: 3500, paid_on: '2026-10-10', mode: 'cash', reference: null, received_by: 'demo-staff-1', receipt_no: 'RCT-004' },
 ]
 
 // ── Expense categories ──
@@ -445,6 +317,11 @@ interface DemoDataContextType {
   checkoutReceipts: CheckoutReceipt[]
   checkoutRentRule: 'per_day' | 'full_month'
   setCheckoutRentRule: (rule: 'per_day' | 'full_month') => void
+  // Attendance
+  attendanceLogs: AttendanceMovement[]
+  attendanceStats: { totalResidents: number; insideHostel: number; outsideHostel: number }
+  recordAttendanceMovement: (residentId: string, direction: 'IN' | 'OUT', note?: string, recordedBy?: string) => AttendanceMovement
+  getResidentAttendanceStatus: (residentId: string) => { status: 'IN' | 'OUT'; lastTime: string; note?: string }
   // Computed
   dashboardStats: DashboardStats
   publicRoomOptions: PublicRoomOption[]
@@ -516,6 +393,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>(stored?.vacatedResidents || initVacatedResidents)
   const [checkoutReceipts, setCheckoutReceipts] = useState<CheckoutReceipt[]>(stored?.checkoutReceipts || initCheckoutReceipts)
   const [checkoutRentRule, setCheckoutRentRule] = useState<'per_day' | 'full_month'>(stored?.checkoutRentRule || 'per_day')
+  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceMovement[]>(stored?.attendanceLogs || initAttendanceLogs)
   const [acRoomsState, setAcRooms] = useState<Set<string>>(
     stored?.acRooms ? new Set(stored.acRooms) : acRoomIds
   )
@@ -543,6 +421,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         vacatedResidents,
         checkoutReceipts,
         checkoutRentRule,
+        attendanceLogs,
         acRooms: Array.from(acRoomsState),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
@@ -553,7 +432,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     roomTypes, rooms, beds, applications, residents, payments, expenses,
     cashAccounts, cashTransactions, products, sales, stockMovements,
     stockPurchases, stockCounts, staffList, vacatedResidents, checkoutReceipts,
-    checkoutRentRule, acRoomsState
+    checkoutRentRule, attendanceLogs, acRoomsState
   ])
 
   // ── Listen for cross-tab updates ──
@@ -580,6 +459,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           if (fresh.vacatedResidents) setVacatedResidents(fresh.vacatedResidents)
           if (fresh.checkoutReceipts) setCheckoutReceipts(fresh.checkoutReceipts)
           if (fresh.checkoutRentRule) setCheckoutRentRule(fresh.checkoutRentRule)
+          if (fresh.attendanceLogs) setAttendanceLogs(fresh.attendanceLogs)
           if (fresh.acRooms) setAcRooms(new Set(fresh.acRooms))
         } catch (err) {
           console.warn('Cross-tab sync error:', err)
@@ -683,6 +563,73 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     loadFromSupabase()
   }, [])
 
+  // ── Attendance helpers & Live derived state ──
+  const getResidentAttendanceStatus = useCallback((residentId: string) => {
+    const lastMovement = attendanceLogs.find(m => m.resident_id === residentId)
+    if (lastMovement) {
+      return {
+        status: lastMovement.direction,
+        lastTime: lastMovement.time,
+        note: lastMovement.note
+      }
+    }
+    return {
+      status: 'IN' as const,
+      lastTime: 'Inside Hostel',
+      note: 'Present in hostel'
+    }
+  }, [attendanceLogs])
+
+  const attendanceStats = useMemo(() => {
+    const activeResidents = residents.filter(r => r.status === 'active')
+    let inside = 0
+    let outside = 0
+
+    for (const r of activeResidents) {
+      const st = getResidentAttendanceStatus(r.id)
+      if (st.status === 'OUT') {
+        outside++
+      } else {
+        inside++
+      }
+    }
+
+    return {
+      totalResidents: activeResidents.length,
+      insideHostel: inside,
+      outsideHostel: outside
+    }
+  }, [residents, getResidentAttendanceStatus])
+
+  const recordAttendanceMovement = useCallback((
+    residentId: string,
+    direction: 'IN' | 'OUT',
+    note?: string,
+    recordedBy?: string
+  ): AttendanceMovement => {
+    const res = residents.find(r => r.id === residentId)
+    const room = rooms.find(rm => rm.id === res?.bed?.room_id)
+    const roomNo = room?.room_no || res?.bed?.room?.room_no || '—'
+    const bedLabel = res?.bed?.bed_label || 'A'
+    const resName = res?.application?.full_name || 'Resident'
+    const nowTime = new Date().toISOString().replace('T', ' ').slice(0, 16)
+
+    const newMov: AttendanceMovement = {
+      id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      resident_id: residentId,
+      resident_name: resName,
+      room_no: roomNo,
+      bed_label: bedLabel,
+      direction,
+      time: nowTime,
+      note: note || (direction === 'IN' ? 'Normal return to hostel' : 'Stepped out from hostel'),
+      recorded_by: recordedBy || 'Staff User'
+    }
+
+    setAttendanceLogs(prev => [newMov, ...prev])
+    return newMov
+  }, [residents, rooms])
+
   // ── Computed values (derived dynamically via useMemo) ──
   const dashboardStats = useMemo<DashboardStats>(() => {
     const occupied = beds.filter(b => b.status === 'occupied').length
@@ -702,17 +649,23 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
     return {
       total_beds: beds.length,
-      occupied, vacant, reserved, maintenance,
+      occupied,
+      vacant,
+      reserved,
+      maintenance,
       pending_applications: pendingApps,
       rent_due_this_month: totalRentDue,
       rent_collected_this_month: totalPaid,
+      total_residents: activeResidents.length,
+      inside_hostel: attendanceStats.insideHostel,
+      outside_hostel: attendanceStats.outsideHostel,
       admissions_possible: [
         { category: 'Twin Sharing', count: twinVacant },
         { category: 'Single Room', count: singleVacant },
         { category: '4-Sharing', count: fourVacant },
       ]
     }
-  }, [beds, applications, residents, payments])
+  }, [beds, applications, residents, payments, attendanceStats])
 
   const publicRoomOptions = useMemo<PublicRoomOption[]>(() => {
     return [
@@ -837,6 +790,14 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     // Add resident
     setResidents(prev => [newResident, ...prev])
 
+    // Record new admission in attendance
+    recordAttendanceMovement(
+      newResident.id,
+      'IN',
+      `Newly admitted resident check-in (Room ${room?.room_no || '—'} · Bed ${bed.bed_label})`,
+      'Staff User'
+    )
+
     // Update application status
     setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: 'approved' as ApplicationStatus, review_note: 'Approved and bed allocated', reviewed_by: 'demo-staff-1' } : a))
 
@@ -954,6 +915,14 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString()
     }
     setVacatedResidents(prev => [newDeparture, ...prev])
+
+    // Record checkout movement in attendance
+    recordAttendanceMovement(
+      resident.id,
+      'OUT',
+      `Vacated hostel - ${params.reason || 'Checkout settlement completed'}`,
+      params.processedBy || 'Admin User'
+    )
 
     // 5. Create Checkout Receipt record
     const newReceipt: CheckoutReceipt = {
@@ -1474,6 +1443,10 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       checkoutReceipts,
       checkoutRentRule,
       setCheckoutRentRule,
+      attendanceLogs,
+      attendanceStats,
+      recordAttendanceMovement,
+      getResidentAttendanceStatus,
       dashboardStats,
       publicRoomOptions,
       rentDueList,

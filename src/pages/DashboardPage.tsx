@@ -8,12 +8,21 @@ import { formatCurrency } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import {
   BedDouble, Users, UserPlus, ClipboardList, IndianRupee,
-  TrendingUp, AlertTriangle, ShoppingCart, Wallet, ArrowRight
+  TrendingUp, AlertTriangle, ShoppingCart, Wallet, ArrowRight,
+  UserCheck, Clock
 } from 'lucide-react'
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { dashboardStats, applications, rentDueList, cashAccounts, products, expenses } = useDemoData()
+  const {
+    dashboardStats,
+    applications,
+    rentDueList,
+    cashAccounts,
+    products,
+    expenses,
+    attendanceStats
+  } = useDemoData()
   const s = dashboardStats
 
   const defaulters = rentDueList.filter(r => r.balance > 0)
@@ -46,6 +55,36 @@ export function DashboardPage() {
         </div>
         <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/rooms')}>
           <StatCard title="Occupancy Rate" value={`${occupancyRate}%`} icon={Users} iconColor="text-blue-600" subtitle={`${s.occupied} of ${s.total_beds} beds`} />
+        </div>
+      </div>
+
+      {/* Live Resident Presence & Attendance */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/residents')}>
+          <StatCard
+            title="Total Active Residents"
+            value={attendanceStats.totalResidents}
+            icon={Users}
+            subtitle={`${s.occupied} assigned to occupied beds`}
+          />
+        </div>
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/attendance?tab=live')}>
+          <StatCard
+            title="Inside Hostel Now"
+            value={attendanceStats.insideHostel}
+            icon={UserCheck}
+            iconColor="text-green-600"
+            subtitle="Present on premises"
+          />
+        </div>
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/attendance?tab=live')}>
+          <StatCard
+            title="Currently Outside"
+            value={attendanceStats.outsideHostel}
+            icon={Clock}
+            iconColor="text-amber-600"
+            subtitle="Classes, work, duty & errands"
+          />
         </div>
       </div>
 

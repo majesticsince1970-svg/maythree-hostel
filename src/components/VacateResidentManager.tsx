@@ -39,6 +39,7 @@ export function VacateResidentManager() {
   const {
     residents,
     rentDueList,
+    payments,
     cashAccounts,
     vacatedResidents,
     checkoutReceipts,
@@ -128,6 +129,14 @@ export function VacateResidentManager() {
       currentMonthLabel = `${monthNames[vacMonth]} ${vacYear} (Full Month)`
     }
 
+    const currentMonthKey = `${vacYear}-${(vacMonth + 1).toString().padStart(2, '0')}`
+    const residentPayments = payments.filter(p => p.resident_id === selectedResident.id)
+    const paidForCurrentMonth = residentPayments
+      .filter(p => p.period_month === currentMonthKey)
+      .reduce((sum, p) => sum + p.amount, 0)
+
+    const currentMonthBalance = Math.max(0, currentMonthRentDue - paidForCurrentMonth)
+
     // If previous dues exist, represent prior month balance
     const priorDues = Math.max(0, generalBalance - monthlyRent)
     if (priorDues > 0) {
@@ -144,18 +153,18 @@ export function VacateResidentManager() {
 
     // Current month item
     items.push({
-      month: `${vacYear}-${(vacMonth + 1).toString().padStart(2, '0')}`,
+      month: currentMonthKey,
       label: currentMonthLabel,
       rent_due: currentMonthRentDue,
-      amount_paid: 0,
-      balance: currentMonthRentDue,
+      amount_paid: paidForCurrentMonth,
+      balance: currentMonthBalance,
       is_current_month: true,
       days_stayed: vacDay,
       total_days: daysInCurrentMonth
     })
 
     return items
-  }, [selectedResident, vacateDate, localRentRule, residentDueInfo, monthlyRent])
+  }, [selectedResident, vacateDate, localRentRule, residentDueInfo, monthlyRent, payments])
 
   const totalRentDue = useMemo(() => {
     return rentBreakdown.reduce((sum, item) => sum + item.balance, 0)

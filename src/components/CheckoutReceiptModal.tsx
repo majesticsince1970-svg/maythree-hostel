@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { PrintTemplate } from '@/components/PrintTemplate'
+import { printIsolatedReceipt } from '@/lib/printUtils'
 import type { CheckoutReceipt } from '@/types/database'
 import { Printer, Download, CheckCircle2, ShieldCheck, X } from 'lucide-react'
 
@@ -15,10 +16,15 @@ interface CheckoutReceiptModalProps {
 }
 
 export function CheckoutReceiptModal({ receipt, open, onClose }: CheckoutReceiptModalProps) {
+  const printableRef = useRef<HTMLDivElement>(null)
   if (!receipt) return null
 
   const handlePrint = () => {
-    window.print()
+    if (printableRef.current) {
+      printIsolatedReceipt(printableRef.current.innerHTML, `Settlement-${receipt.receipt_no}`)
+    } else {
+      window.print()
+    }
   }
 
   const isRefund = receipt.settlement_type === 'refund'
@@ -66,7 +72,7 @@ export function CheckoutReceiptModal({ receipt, open, onClose }: CheckoutReceipt
         </div>
 
         {/* ── ISOLATED A4 PRINTABLE DOCUMENT ── */}
-        <div className="border border-neutral-200 rounded-xl overflow-hidden shadow-sm max-h-[75vh] overflow-y-auto">
+        <div ref={printableRef} className="border border-neutral-200 rounded-xl overflow-hidden shadow-sm max-h-[75vh] overflow-y-auto">
           <PrintTemplate
             documentTitle="TAX INVOICE / CHECKOUT SETTLEMENT RECEIPT"
             referenceNo={receipt.receipt_no}

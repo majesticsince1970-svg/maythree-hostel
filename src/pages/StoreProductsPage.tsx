@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,6 +48,7 @@ function productToForm(p: Product): ProductFormData {
 
 export function StoreProductsPage() {
   const { products, addProduct, updateProduct } = useDemoData()
+  const { isAdmin } = useAuth()
   const { addToast } = useToast()
   const [search, setSearch] = useState('')
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -148,9 +150,11 @@ export function StoreProductsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Button onClick={openAdd} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Add Product
-          </Button>
+          {isAdmin && (
+            <Button onClick={openAdd} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Add Product
+            </Button>
+          )}
         </div>
       </div>
 
@@ -219,9 +223,13 @@ export function StoreProductsPage() {
                         </TableCell>
                         <TableCell>{formatCurrency(stockValue)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                          {isAdmin ? (
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -257,11 +265,13 @@ export function StoreProductsPage() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="mt-2 flex justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
-                        <Pencil className="h-3 w-3 mr-1" /> Edit
-                      </Button>
-                    </div>
+                    {isAdmin && (
+                      <div className="mt-2 flex justify-end">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
+                          <Pencil className="h-3 w-3 mr-1" /> Edit
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )

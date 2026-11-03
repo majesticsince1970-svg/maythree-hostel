@@ -4,21 +4,37 @@ import { useDemoData } from '@/contexts/DemoDataContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
+import type { Resident } from '@/types/database'
 import {
   ArrowLeft, Delete, CheckCircle2, Lock,
-  Clock, ShieldAlert, Sparkles, Building2
+  Clock, ShieldAlert, Sparkles, Building2, UserCheck, ArrowDownRight, ArrowUpRight
 } from 'lucide-react'
+
+const OUT_REASONS = [
+  'College / Classes',
+  'Office / Work',
+  'Hospital / Clinical duty',
+  'Market / Shopping',
+  'Home Visit / Leave',
+  'Other'
+]
 
 export function AttendanceKioskPage() {
   const navigate = useNavigate()
-  const { residents } = useDemoData()
+  const { residents, recordAttendanceMovement, getResidentAttendanceStatus } = useDemoData()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [lockCountdown, setLockCountdown] = useState(0)
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+
+  // Punch modal state
+  const [verifiedResident, setVerifiedResident] = useState<Resident | null>(null)
+  const [selectedReason, setSelectedReason] = useState(OUT_REASONS[0])
+  const [successMessage, setSuccessMessage] = useState('')
 
   // Clock tick
   useEffect(() => {
@@ -47,7 +63,11 @@ export function AttendanceKioskPage() {
     if (lockCountdown > 0) return
     if (pin.length < 4) {
       setError('')
-      setPin(prev => prev + digit)
+      const nextPin = pin + digit
+      setPin(nextPin)
+      if (nextPin.length === 4) {
+        verifyPinCode(nextPin)
+      }
     }
   }
 
@@ -63,12 +83,11 @@ export function AttendanceKioskPage() {
     setError('')
   }
 
-  const handleVerify = () => {
-    if (pin.length !== 4) return
-
-    // In Phase 3, we match against resident.pin
-    // For now in Phase 1 demo: check sample PIN '1234' or last 4 of phone
-    const matched = residents.find(r => r.application?.phone?.endsWith(pin) || pin === '1234')
+  const verifyPinCode = (inputPin: string) => {
+    // Match against active residents by PIN or last 4 digits of phone, or master demo PIN 1234
+    const matched = residents.find(
+      r => r.status === 'active' && (r.pin === inputPin || r.application?.phone?.endsWith(inputPin) || inputPin === '1234')
+    )
 
     if (!matched) {
       const nextFail = failedAttempts + 1
@@ -82,10 +101,31 @@ export function AttendanceKioskPage() {
       }
     } else {
       setError('')
-      alert(`PIN Verified: Welcome ${matched.application?.full_name}! (Phase 3 confirmation dialog will appear here)`)
       setPin('')
+      setVerifiedResident(matched)
     }
   }
+
+  const handleExecutePunch = (direction: 'IN' | 'OUT') => {
+    if (!verifiedResident) return
+
+    const note = direction === 'OUT' ? selectedReason : 'Normal return to hostel'
+    recordAttendanceMovement(verifiedResident.id, direction, note, 'Entrance Kiosk Punch')
+
+    const resName = verifiedResident.application?.full_name || 'Resident'
+    setSuccessMessage(
+      direction === 'IN'
+        ? `Welcome back, ${resName}! Marked IN.`
+        : `Safe travels, ${resName}! Marked OUT.`
+    )
+
+    setTimeout(() => {
+      setSuccessMessage('')
+      setVerifiedResident(null)
+    }, 2200)
+  }
+
+  const currentStatus = verifiedResident ? getResidentAttendanceStatus(verifiedResident.id).status : 'IN'
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between p-4 sm:p-6 select-none">
@@ -191,18 +231,9 @@ export function AttendanceKioskPage() {
           </button>
         </div>
 
-        {/* Submit Button */}
-        <div className="max-w-xs mx-auto pt-2">
-          <Button
-            className="w-full py-6 text-base font-bold shadow-lg"
-            disabled={pin.length !== 4 || lockCountdown > 0}
-            onClick={handleVerify}
-          >
-            Confirm PIN
-          </Button>
-          <p className="text-[11px] text-neutral-500 text-center mt-2">
-            Demo PIN hint: Try 1234 or last 4 digits of phone
-          </p>
+        {/* Info Hint */}
+        <div className="max-w-xs mx-auto pt-2 text-center text-xs text-neutral-500">
+          Tip: Enter your 4-digit PIN (e.g. 1001-1075 or last 4 digits of mobile)
         </div>
       </div>
 
@@ -210,6 +241,89 @@ export function AttendanceKioskPage() {
       <div className="text-center text-xs text-neutral-500 border-t border-neutral-900 pt-3">
         {BRAND.name} · Kiosk Station · {BRAND.address.city}, {BRAND.address.state}
       </div>
+
+      {/* Resident Punch Modal */}
+      <Dialog open={!!verifiedResident} onClose={() => setVerifiedResident(null)}>
+        {verifiedResident && (
+          <div className="space-y-4 p-2 text-neutral-900 dark:text-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <UserCheck className="h-5 w-5 text-primary" />
+                Attendance Verification
+              </DialogTitle>
+            </DialogHeader>
+
+            {successMessage ? (
+              <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center space-y-2">
+                <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto animate-bounce" />
+                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{successMessage}</p>
+                <p className="text-xs text-muted-foreground">Updating live hostel register...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/60 rounded-xl border flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-base">{verifiedResident.application?.full_name}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Room {verifiedResident.bed?.room?.room_no || '—'} · Bed {verifiedResident.bed?.bed_label}
+                    </p>
+                  </div>
+                  <Badge variant={currentStatus === 'IN' ? 'success' : 'warning'} className="text-xs px-2.5 py-1">
+                    Currently {currentStatus}
+                  </Badge>
+                </div>
+
+                {currentStatus === 'IN' ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground">Purpose of Leaving (Marking OUT):</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {OUT_REASONS.map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setSelectedReason(r)}
+                          className={`p-2.5 rounded-lg text-xs font-medium border text-left transition-all ${
+                            selectedReason === r
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-muted/40 hover:bg-muted border-neutral-300 dark:border-neutral-700'
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+
+                    <Button
+                      className="w-full py-6 text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white gap-2 mt-2"
+                      onClick={() => handleExecutePunch('OUT')}
+                    >
+                      <ArrowUpRight className="h-4 w-4" /> Punch OUT (Leaving Hostel)
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs text-muted-foreground text-center">
+                      Welcome back! Confirm your entry to mark yourself inside the hostel.
+                    </p>
+                    <Button
+                      className="w-full py-6 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                      onClick={() => handleExecutePunch('IN')}
+                    >
+                      <ArrowDownRight className="h-4 w-4" /> Punch IN (Returning to Hostel)
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="pt-2">
+              <Button variant="outline" size="sm" onClick={() => setVerifiedResident(null)} disabled={!!successMessage}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }

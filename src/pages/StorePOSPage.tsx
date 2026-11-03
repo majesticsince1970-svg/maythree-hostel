@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { PrintTemplate } from '@/components/PrintTemplate'
+import { printIsolatedReceipt } from '@/lib/printUtils'
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard,
   Banknote, Printer, Sparkles, User, Receipt, CheckCircle2
@@ -38,6 +39,7 @@ export function StorePOSPage() {
   const [selectedResidentId, setSelectedResidentId] = useState<string>('')
   const [showReceipt, setShowReceipt] = useState(false)
   const [completedReceipt, setCompletedReceipt] = useState<CompletedSaleReceipt | null>(null)
+  const posPrintRef = useRef<HTMLDivElement>(null)
 
   const magicTumbler = products.find(p => p.name.toLowerCase().includes('magic tumbler'))
 
@@ -463,7 +465,13 @@ export function StorePOSPage() {
                 <Button
                   size="sm"
                   className="h-8 text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white font-semibold"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (posPrintRef.current) {
+                      printIsolatedReceipt(posPrintRef.current.innerHTML, `Store-Receipt-${completedReceipt.id.slice(-8)}`)
+                    } else {
+                      window.print()
+                    }
+                  }}
                 >
                   <Printer className="h-3.5 w-3.5 mr-1.5" /> Print A4 Receipt
                 </Button>
@@ -474,7 +482,7 @@ export function StorePOSPage() {
             </div>
 
             {/* Isolated Printable Payload */}
-            <div className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
+            <div ref={posPrintRef} className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
               <PrintTemplate
                 documentTitle="STORE POS TAX INVOICE & CASH RECEIPT"
                 referenceNo={`ORD-${completedReceipt.id.slice(-8)}`}

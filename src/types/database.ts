@@ -191,6 +191,18 @@ export interface StaffProfile {
   email?: string
 }
 
+export interface AttendanceMovement {
+  id: string
+  resident_id: string
+  resident_name: string
+  room_no: string
+  bed_label?: string
+  direction: 'IN' | 'OUT'
+  time: string
+  note?: string
+  recorded_by?: string
+}
+
 export interface Amenity {
   id: string
   name: string
@@ -433,6 +445,9 @@ export interface DashboardStats {
   pending_applications: number
   rent_due_this_month: number
   rent_collected_this_month: number
+  total_residents?: number
+  inside_hostel?: number
+  outside_hostel?: number
   admissions_possible: {
     category: string
     count: number

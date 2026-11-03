@@ -113,6 +113,15 @@
     display: none !important;
   }
 
+  /* When an isolated dialog or printable document is open, hide the background app tree */
+  body:has([role="dialog"]) main {
+    display: none !important;
+  }
+
+  body:has(.printable-document) main:not(:has(.printable-document)) {
+    display: none !important;
+  }
+
   /* Modal unwrap when printing */
   [role="dialog"] {
     position: static !important;

@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
+  switchRole: (role: 'admin' | 'staff' | 'store_staff') => void
   isAdmin: boolean
   isStaff: boolean
   isStoreStaff: boolean
@@ -131,6 +132,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const switchRole = (role: 'admin' | 'staff' | 'store_staff') => {
+    const emailByRole: Record<'admin' | 'staff' | 'store_staff', string> = {
+      admin: 'admin@mythreehostels.com',
+      staff: 'staff@mythreehostels.com',
+      store_staff: 'store@mythreehostels.com',
+    }
+    const targetEmail = emailByRole[role]
+    const demo = DEMO_USERS[targetEmail]
+    if (demo) {
+      localStorage.setItem('demo_user_email', targetEmail)
+      setProfile(demo.profile)
+      setUser({ id: demo.profile.user_id, email: targetEmail } as User)
+    }
+  }
+
   const value: AuthContextType = {
     user,
     session,
@@ -138,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn,
     signOut,
+    switchRole,
     isAdmin: profile?.role === 'admin',
     isStaff: profile?.role === 'staff' || profile?.role === 'admin',
     isStoreStaff: profile?.role === 'store_staff' || profile?.role === 'admin',

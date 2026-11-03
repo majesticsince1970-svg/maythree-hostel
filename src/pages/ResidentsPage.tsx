@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDemoData } from '@/contexts/DemoDataContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/components/ui/toast'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +33,9 @@ const statusLabel: Record<ResidentStatus, string> = {
 
 export function ResidentsPage() {
   const navigate = useNavigate()
-  const { residents, payments, rentDueList } = useDemoData()
+  const { residents, payments, rentDueList, resetResidentPin } = useDemoData()
+  const { isAdmin } = useAuth()
+  const { addToast } = useToast()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Resident | null>(null)
   const [tab, setTab] = useState<FilterTab>('all')

@@ -16,7 +16,13 @@ import {
 } from 'lucide-react'
 
 export function AttendancePage() {
-  const { residents } = useDemoData()
+  const {
+    residents,
+    attendanceLogs,
+    recordAttendanceMovement,
+    getResidentAttendanceStatus,
+    attendanceStats
+  } = useDemoData()
   const { profile } = useAuth()
   const navigate = useNavigate()
   const { addToast } = useToast()
@@ -30,31 +36,14 @@ export function AttendancePage() {
 
   const activeResidents = useMemo(() => residents.filter(r => r.status === 'active'), [residents])
 
-  // Baseline movement logs
-  const [movements, setMovements] = useState([
-    { id: 'mov-1', residentId: 'res-1', residentName: 'Kavya Nair', roomNo: '201-A', direction: 'IN' as const, time: '2026-10-31 20:45', note: 'Regular return' },
-    { id: 'mov-2', residentId: 'res-2', residentName: 'Meera Iyer', roomNo: '301-A', direction: 'OUT' as const, time: '2026-10-31 18:30', note: 'Office overtime' },
-    { id: 'mov-3', residentId: 'res-3', residentName: 'Roshni Das', roomNo: 'B1-A', direction: 'IN' as const, time: '2026-10-31 17:15', note: 'Returned from college' },
-  ])
+  // Derive who is inside vs outside from live attendance state
+  const insideResidents = useMemo(() => {
+    return activeResidents.filter(r => getResidentAttendanceStatus(r.id).status === 'IN')
+  }, [activeResidents, getResidentAttendanceStatus])
 
-  // Determine current resident status from movements
-  const residentStatuses = useMemo(() => {
-    const map = new Map<string, { status: 'IN' | 'OUT'; lastTime: string; note?: string }>()
-    // Defaults: residents are IN unless last movement is OUT
-    for (const r of activeResidents) {
-      map.set(r.id, { status: 'IN', lastTime: 'Hostel' })
-    }
-    // Apply movements
-    for (const m of movements) {
-      if (map.has(m.residentId)) {
-        map.set(m.residentId, { status: m.direction, lastTime: m.time, note: m.note })
-      }
-    }
-    return map
-  }, [activeResidents, movements])
-
-  const insideResidents = activeResidents.filter(r => (residentStatuses.get(r.id)?.status || 'IN') === 'IN')
-  const outsideResidents = activeResidents.filter(r => residentStatuses.get(r.id)?.status === 'OUT')
+  const outsideResidents = useMemo(() => {
+    return activeResidents.filter(r => getResidentAttendanceStatus(r.id).status === 'OUT')
+  }, [activeResidents, getResidentAttendanceStatus])
 
   const handleManualSubmit = () => {
     if (!selectedResidentId) {
@@ -63,19 +52,13 @@ export function AttendancePage() {
     }
 
     const res = activeResidents.find(r => r.id === selectedResidentId)
-    const nowTime = new Date().toISOString().replace('T', ' ').slice(0, 16)
+    recordAttendanceMovement(
+      selectedResidentId,
+      manualDirection,
+      manualNote.trim() || `Manual entry by ${profile?.name || 'Staff'}`,
+      profile?.name || 'Staff'
+    )
 
-    const newMov = {
-      id: `mov-${Date.now()}`,
-      residentId: selectedResidentId,
-      residentName: res?.application?.full_name || 'Resident',
-      roomNo: res?.bed?.room?.room_no || '—',
-      direction: manualDirection,
-      time: nowTime,
-      note: manualNote.trim() || `Manual entry by ${profile?.name || 'Staff'}`
-    }
-
-    setMovements(prev => [newMov, ...prev])
     addToast({
       type: 'success',
       title: `Resident Marked ${manualDirection}`,
@@ -190,7 +173,7 @@ export function AttendancePage() {
           onClick={() => setSearchParams({ tab: 'log' })}
         >
           <ArrowRightLeft className="h-4 w-4 mr-1.5" />
-          Daily Movement Log ({movements.length})
+          Daily Movement Log ({attendanceLogs.length})
         </Button>
       </div>
 
@@ -253,7 +236,7 @@ export function AttendancePage() {
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                     {filteredOutside.map(r => {
-                      const st = residentStatuses.get(r.id)
+                      const st = getResidentAttendanceStatus(r.id)
                       return (
                         <div key={r.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border">
                           <div>
@@ -282,7 +265,7 @@ export function AttendancePage() {
           </CardHeader>
           <CardContent className="pt-4">
             <div className="space-y-2.5">
-              {movements.map((m) => (
+              {attendanceLogs.map((m) => (
                 <div key={m.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border text-sm">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-full ${m.direction === 'IN' ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'}`}>
@@ -290,13 +273,13 @@ export function AttendancePage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{m.residentName}</span>
+                        <span className="font-semibold text-foreground">{m.resident_name}</span>
                         <Badge variant={m.direction === 'IN' ? 'success' : 'warning'} className="text-[10px] py-0 px-1.5">
                           {m.direction}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Room {m.roomNo} · {m.time} {m.note && `· ${m.note}`}
+                        Room {m.room_no}{m.bed_label ? ` (Bed ${m.bed_label})` : ''} · {m.time} {m.note && `· ${m.note}`}
                       </p>
                     </div>
                   </div>
