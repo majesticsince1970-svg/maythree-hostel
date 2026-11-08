@@ -327,7 +327,8 @@ interface DemoDataContextType {
   publicRoomOptions: PublicRoomOption[]
   rentDueList: RentDueView[]
   // Application actions
-  addApplication: (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>) => Application
+  addApplication: (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>) => Promise<Application>
+  refreshApplications: () => Promise<void>
   updateApplicationStatus: (id: string, status: ApplicationStatus, note?: string) => void
   updateApplicationDetails: (id: string, details: Partial<Application>) => void
   // Bed allocation & checkout
@@ -563,6 +564,38 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     loadFromSupabase()
   }, [])
 
+  // ── Realtime Listener for Applications (Admin Live Sync) ──
+  useEffect(() => {
+    if (DEMO_MODE) return
+
+    const channel = supabase
+      .channel('public:applications_live_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'applications' },
+        (payload) => {
+          console.log('[Realtime:Applications] Change event received:', payload.eventType, payload)
+          if (payload.eventType === 'INSERT') {
+            const newApp = payload.new as Application
+            setApplications(prev => {
+              if (prev.some(a => a.id === newApp.id || a.ref_no === newApp.ref_no)) return prev
+              return [newApp, ...prev]
+            })
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedApp = payload.new as Application
+            setApplications(prev => prev.map(a => a.id === updatedApp.id ? { ...a, ...updatedApp } : a))
+          } else if (payload.eventType === 'DELETE') {
+            setApplications(prev => prev.filter(a => a.id !== (payload.old as any).id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   // ── Attendance helpers & Live derived state ──
   const getResidentAttendanceStatus = useCallback((residentId: string) => {
     const lastMovement = attendanceLogs.find(m => m.resident_id === residentId)
@@ -695,33 +728,86 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   }, [residents, payments, rooms])
 
   // ── Application actions ──
-  const addApplication = useCallback((app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>): Application => {
+  const addApplication = useCallback(async (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>): Promise<Application> => {
+    const timestamp = Date.now()
+    const refNo = `HST-2026-${String(applications.length + 1).padStart(4, '0')}`
     const newApp: Application = {
       ...app,
-      id: `app-${Date.now()}`,
-      ref_no: `HST-2026-${String(applications.length + 1).padStart(4, '0')}`,
+      id: `app-${timestamp}`,
+      ref_no: refNo,
       submitted_at: new Date().toISOString(),
-      status: 'submitted',
+      status: 'pending_approval',
       reviewed_by: null,
       review_note: null,
     }
     setApplications(prev => [newApp, ...prev])
 
     if (!DEMO_MODE) {
-      (supabase as any).from('applications').insert([newApp]).then(({ error }: any) => {
-        if (error) console.warn('Supabase application insert warning:', error.message)
-      })
+      try {
+        const { error } = await (supabase as any).from('applications').insert([{
+          id: newApp.id,
+          ref_no: newApp.ref_no,
+          full_name: newApp.full_name,
+          dob: newApp.dob,
+          phone: newApp.phone,
+          email: newApp.email,
+          permanent_address: newApp.permanent_address,
+          occupation: newApp.occupation,
+          institution_or_employer: newApp.institution_or_employer,
+          id_proof_type: newApp.id_proof_type,
+          id_proof_no: newApp.id_proof_no,
+          emergency_name: newApp.emergency_name,
+          emergency_relation: newApp.emergency_relation,
+          emergency_phone: newApp.emergency_phone,
+          preferred_room_type_id: newApp.preferred_room_type_id,
+          preferred_ac: newApp.preferred_ac,
+          status: 'pending_approval',
+          submitted_at: newApp.submitted_at
+        }])
+        if (error) {
+          console.error('[PublicAdmission] Supabase submission error:', error)
+        } else {
+          console.log('[PublicAdmission] Application recorded with pending_approval status:', newApp.ref_no)
+        }
+      } catch (err) {
+        console.error('[PublicAdmission] Network/database exception during submission:', err)
+      }
     }
 
     return newApp
   }, [applications.length])
+
+  const refreshApplications = useCallback(async () => {
+    if (DEMO_MODE) return
+    try {
+      const { data, error } = await supabase
+        .from('applications')
+        .select('*')
+        .order('submitted_at', { ascending: false })
+      if (!error && data) {
+        setApplications(prev => {
+          const map = new Map(prev.map(a => [a.id, a]))
+          data.forEach((app: any) => map.set(app.id, { ...map.get(app.id), ...app }))
+          return Array.from(map.values()).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
+        })
+      } else if (error) {
+        console.error('[AdminDashboard] Applications fetch error:', error)
+      }
+    } catch (err) {
+      console.error('[AdminDashboard] Failed to refresh applications:', err)
+    }
+  }, [])
 
   const updateApplicationStatus = useCallback((id: string, status: ApplicationStatus, note?: string) => {
     setApplications(prev => prev.map(a => a.id === id ? { ...a, status, review_note: note || a.review_note, reviewed_by: 'demo-staff-1' } : a))
 
     if (!DEMO_MODE) {
       (supabase as any).from('applications').update({ status, review_note: note }).eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase application update warning:', error.message)
+        if (error) {
+          console.error('[AdminDashboard] Supabase application status update error:', error)
+        } else {
+          console.log(`[AdminDashboard] Application ${id} status updated to ${status}`)
+        }
       })
     }
   }, [])
@@ -1451,6 +1537,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       publicRoomOptions,
       rentDueList,
       addApplication,
+      refreshApplications,
       updateApplicationStatus,
       updateApplicationDetails,
       allocateBed,

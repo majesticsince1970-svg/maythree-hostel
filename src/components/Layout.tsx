@@ -129,7 +129,7 @@ export function Layout() {
   const navigate = useNavigate()
 
   const pendingVerificationCount = applications.filter(
-    a => a.status === 'submitted' || a.status === 'under_review'
+    a => a.status === 'pending_approval' || a.status === 'submitted' || a.status === 'under_review'
   ).length
 
   const filteredModules = navModules.filter(m => profile && m.roles.includes(profile.role))

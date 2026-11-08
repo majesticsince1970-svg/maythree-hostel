@@ -88,7 +88,7 @@ export function ApplyPage() {
     if (!personalData || !addressData || !emergencyData || !agreed) return
     setSubmitting(true)
     try {
-      const app = addApplication({
+      const app = await addApplication({
         full_name: personalData.full_name,
         dob: personalData.dob,
         phone: personalData.phone,
@@ -106,9 +106,17 @@ export function ApplyPage() {
         documents: [],
         preferred_room_type: roomTypes.find(rt => rt.id === personalData.preferred_room_type_id),
       })
-      navigate('/apply/done', { state: { refNo: app.ref_no } })
-    } catch {
-      alert('Something went wrong. Please try again.')
+      navigate('/apply/done', {
+        state: {
+          refNo: app.ref_no,
+          name: personalData.full_name,
+          phone: personalData.phone,
+          status: 'pending_approval'
+        }
+      })
+    } catch (err) {
+      console.error('[PublicAdmission] Form submission failed:', err)
+      alert('Something went wrong submitting your application. Please check your connection and try again.')
     } finally {
       setSubmitting(false)
     }

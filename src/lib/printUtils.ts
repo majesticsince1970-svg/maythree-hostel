@@ -144,3 +144,4 @@ export function printIsolatedReceipt(contentHtml: string, documentTitle = 'Offic
     }
   }, 350)
 }
+

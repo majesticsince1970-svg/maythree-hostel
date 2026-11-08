@@ -1,4 +1,4 @@
-export type ApplicationStatus = 'submitted' | 'under_review' | 'approved' | 'rejected' | 'waitlisted'
+export type ApplicationStatus = 'pending_approval' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'waitlisted'
 export type BedStatus = 'available' | 'reserved' | 'occupied' | 'maintenance'
 export type ResidentStatus = 'active' | 'notice' | 'checked_out' | 'vacated'
 export type PaymentMode = 'cash' | 'UPI' | 'bank'

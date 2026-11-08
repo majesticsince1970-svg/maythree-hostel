@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -9,13 +9,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import type { Application, ApplicationStatus, PaymentMode } from '@/types/database'
 import {
   Search, Eye, CheckCircle, XCircle, Clock, FileText, Phone,
   Briefcase, BedDouble, Snowflake, Edit, UserCheck, ShieldAlert,
   Building2, KeyRound, Banknote, Calendar, Check, AlertTriangle, ArrowRight,
-  ClipboardList
+  ClipboardList, RefreshCw
 } from 'lucide-react'
 
 type QueueTab = 'pending' | 'ready' | 'rejected' | 'all'
@@ -30,7 +30,8 @@ export function ApplicationsPage() {
     acRooms,
     updateApplicationStatus,
     updateApplicationDetails,
-    allocateBed
+    allocateBed,
+    refreshApplications
   } = useDemoData()
   const { profile, isAdmin } = useAuth()
   const { addToast } = useToast()
@@ -40,6 +41,8 @@ export function ApplicationsPage() {
   // Tab & search
   const [tab, setTab] = useState<QueueTab>('pending')
   const [search, setSearch] = useState('')
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date())
 
   // Dialogs
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
@@ -58,6 +61,36 @@ export function ApplicationsPage() {
   const [advanceAccountId, setAdvanceAccountId] = useState('ca-3') // Rent Cash default
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Auto-refresh listener for admin panel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (refreshApplications) {
+        refreshApplications()
+        setLastSyncTime(new Date())
+      }
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [refreshApplications])
+
+  const handleManualSync = async () => {
+    setIsSyncing(true)
+    try {
+      if (refreshApplications) {
+        await refreshApplications()
+      }
+      setLastSyncTime(new Date())
+      addToast({
+        type: 'info',
+        title: 'Real-Time Sync Complete',
+        description: 'New admission submissions have been checked and updated.'
+      })
+    } catch {
+      // Ignored
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   // Edit form state
   const [editForm, setEditForm] = useState({
     full_name: '',
@@ -74,8 +107,11 @@ export function ApplicationsPage() {
     emergency_phone: '',
   })
 
+  // Helper for pending status: status === 'pending_approval' (plus submitted/under_review for compatibility)
+  const isPendingStatus = (status: string) => status === 'pending_approval' || status === 'submitted' || status === 'under_review'
+
   // Pending counts
-  const pendingCount = applications.filter(a => a.status === 'submitted' || a.status === 'under_review').length
+  const pendingCount = applications.filter(a => isPendingStatus(a.status)).length
   const readyCount = applications.filter(a => a.status === 'approved' && !a.review_note?.includes('bed allocated')).length
   const rejectedCount = applications.filter(a => a.status === 'rejected').length
 
@@ -83,7 +119,7 @@ export function ApplicationsPage() {
   const filtered = useMemo(() => {
     return applications
       .filter(a => {
-        if (tab === 'pending') return a.status === 'submitted' || a.status === 'under_review'
+        if (tab === 'pending') return isPendingStatus(a.status)
         if (tab === 'ready') return a.status === 'approved' && !a.review_note?.includes('bed allocated')
         if (tab === 'rejected') return a.status === 'rejected'
         return true
@@ -248,20 +284,36 @@ export function ApplicationsPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ClipboardList className="h-6 w-6 text-primary" />
-            New Admission Verification Queue
+            New Admission Verification & Approval
           </h1>
           <p className="text-muted-foreground text-sm">
-            Step 1: Verify submissions & documents → Step 2: Approve → Step 3: Allocate vacant bed & collect advance
+            Step 1: Review pending admissions → Step 2: Approve or Reject → Step 3: Allocate vacant bed & collect advance
           </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search applicant name, ref, phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 text-xs h-9"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2.5 py-1.5 rounded-full border">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live Sync Active</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="text-xs h-9 gap-1.5"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")} />
+            {isSyncing ? 'Syncing...' : 'Sync Submissions'}
+          </Button>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search applicant name, ref, phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 text-xs h-9"
+            />
+          </div>
         </div>
       </div>
 
@@ -274,7 +326,7 @@ export function ApplicationsPage() {
           onClick={() => setTab('pending')}
         >
           <Clock className="h-3.5 w-3.5" />
-          Pending Verification
+          Pending Approval
           {pendingCount > 0 && (
             <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0 h-4">
               {pendingCount}
@@ -325,7 +377,7 @@ export function ApplicationsPage() {
             <h3 className="font-semibold text-base">No Applications in this Queue</h3>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               {tab === 'pending'
-                ? 'All submitted applications have been reviewed! New submissions from the QR portal will appear here.'
+                ? 'All submitted applications have been reviewed! New submissions from the QR portal will appear here in real time.'
                 : 'No applications match your active filter.'}
             </p>
           </CardContent>
@@ -334,7 +386,7 @@ export function ApplicationsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((app) => {
             const isApproved = app.status === 'approved'
-            const isPending = app.status === 'submitted' || app.status === 'under_review'
+            const isPending = isPendingStatus(app.status)
             const isRejected = app.status === 'rejected'
 
             return (
@@ -350,7 +402,7 @@ export function ApplicationsPage() {
                         <span className="font-bold text-sm text-foreground">{app.full_name}</span>
                         {isPending && (
                           <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                            Pending Verification
+                            Pending Approval
                           </Badge>
                         )}
                         {isApproved && (
@@ -545,7 +597,7 @@ export function ApplicationsPage() {
             {/* Modal Actions */}
             {isStaff && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                {(selectedApp.status === 'submitted' || selectedApp.status === 'under_review') && (
+                {isPendingStatus(selectedApp.status) && (
                   <>
                     {isAdmin && (
                       <Button

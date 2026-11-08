@@ -23,7 +23,7 @@ export function AdmissionsPage() {
   const [copied, setCopied] = useState(false)
 
   const pendingVerificationCount = applications.filter(
-    a => a.status === 'submitted' || a.status === 'under_review'
+    a => a.status === 'pending_approval' || a.status === 'submitted' || a.status === 'under_review'
   ).length
 
   const publicApplyUrl = `${window.location.origin}/apply`

@@ -107,19 +107,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signIn = async (email: string, password: string) => {
+    const cleanEmail = email.trim().toLowerCase()
     if (DEMO_MODE) {
-      const demoUser = DEMO_USERS[email]
+      const demoUser = DEMO_USERS[cleanEmail]
       if (demoUser && demoUser.password === password) {
-        localStorage.setItem('demo_user_email', email)
+        localStorage.setItem('demo_user_email', cleanEmail)
         setProfile(demoUser.profile)
-        setUser({ id: demoUser.profile.user_id, email } as User)
+        setUser({ id: demoUser.profile.user_id, email: cleanEmail } as User)
         return { error: null }
       }
-      return { error: new Error('Invalid email or password') }
+      return { error: new Error('Invalid username or password') }
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error ? new Error(error.message) : null }
+    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password })
+    if (error) {
+      console.warn('[Auth] Authentication failed for provided credentials')
+      return { error: new Error('Invalid username or password') }
+    }
+    return { error: null }
   }
 
   const signOut = async () => {

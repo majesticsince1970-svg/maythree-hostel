@@ -364,3 +364,4 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
     attendanceLogs
   }
 }
+
