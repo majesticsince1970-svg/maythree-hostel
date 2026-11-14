@@ -70,14 +70,12 @@ export interface SeedDataResult {
   attendanceLogs: AttendanceMovement[]
 }
 
-export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult {
+export function generateCompleteHostelData(rts = seedRoomTypes, populateDemoGuests: boolean = false): SeedDataResult {
   const rooms: Room[] = []
   const beds: Bed[] = []
   const occupiedBedIds: { bedId: string; roomId: string; bedLabel: string; rent: number; deposit: number }[] = []
 
   // 1. Floor 2: Twin sharing (201-219) -> 19 rooms * 2 beds = 38 beds
-  // Occupy 16 beds: rooms 201 to 208 both A and B (8 rooms * 2 = 16 occupied beds)
-  // Remaining 22 beds available
   for (let i = 201; i <= 219; i++) {
     const roomId = `room-${i}`
     rooms.push({
@@ -90,7 +88,7 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
       room_type: rts[0]
     })
 
-    const isRoomOccupied = i <= 208
+    const isRoomOccupied = populateDemoGuests && i <= 208
     for (const label of ['A', 'B']) {
       const bedId = `bed-${i}-${label}`
       const status: BedStatus = isRoomOccupied ? 'occupied' : 'available'
@@ -102,8 +100,6 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
   }
 
   // 2. Floor 3: Single rooms (301-319) -> 19 rooms * 1 bed = 19 beds
-  // Occupy 9 beds: rooms 301 to 309 (9 occupied beds)
-  // Remaining 10 beds available
   for (let i = 301; i <= 319; i++) {
     const roomId = `room-${i}`
     rooms.push({
@@ -116,7 +112,7 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
       room_type: rts[1]
     })
 
-    const isBedOccupied = i <= 309
+    const isBedOccupied = populateDemoGuests && i <= 309
     const bedId = `bed-${i}-A`
     const status: BedStatus = isBedOccupied ? 'occupied' : 'available'
     beds.push({ id: bedId, room_id: roomId, bed_label: 'A', status })
@@ -126,12 +122,8 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
   }
 
   // 3. Flats: 4-sharing across 10 flats (A to J) -> 28 rooms * 4 beds = 112 beds
-  // Occupy exactly 50 beds, leaving 62 available
-  // Total beds = 38 + 19 + 112 = 169 beds!
-  // Total occupied beds = 16 + 9 + 50 = 75 occupied beds!
-  // Total available beds = 22 + 10 + 62 = 94 available beds!
   const flatRoomCounts: Record<string, number> = { A: 2, B: 3, C: 3, D: 3, E: 3, F: 2, G: 3, H: 3, I: 3, J: 3 }
-  let flatOccupiedTarget = 50
+  let flatOccupiedTarget = populateDemoGuests ? 50 : 0
 
   for (const flat of seedFlats) {
     const count = flatRoomCounts[flat.code] || 3
@@ -159,6 +151,18 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
         }
         beds.push({ id: bedId, room_id: roomId, bed_label: label, status })
       }
+    }
+  }
+
+  // If demo guests are not requested, return clean hostel structure with 0 residents and all beds available
+  if (!populateDemoGuests) {
+    return {
+      rooms,
+      beds,
+      applications: [],
+      residents: [],
+      payments: [],
+      attendanceLogs: []
     }
   }
 
@@ -319,40 +323,42 @@ export function generateCompleteHostelData(rts = seedRoomTypes): SeedDataResult 
   const now = new Date()
   const todayStr = now.toISOString().slice(0, 10)
 
-  // Mark first 7 residents as OUT with timestamps
-  for (let i = 0; i < 7; i++) {
-    const res = residents[i]
-    const hoursAgo = (i + 1) * 1.5
-    const movTime = new Date(now.getTime() - hoursAgo * 3600000).toISOString().replace('T', ' ').slice(0, 16)
-    attendanceLogs.push({
-      id: `mov-out-${i + 1}`,
-      resident_id: res.id,
-      resident_name: res.application?.full_name || 'Resident',
-      room_no: res.bed?.room?.room_no || '—',
-      bed_label: res.bed?.bed_label,
-      direction: 'OUT',
-      time: movTime,
-      note: outReasons[i % outReasons.length],
-      recorded_by: 'Kiosk Automated Punch'
-    })
-  }
+  if (populateDemoGuests && residents.length >= 15) {
+    // Mark first 7 residents as OUT with timestamps
+    for (let i = 0; i < 7; i++) {
+      const res = residents[i]
+      const hoursAgo = (i + 1) * 1.5
+      const movTime = new Date(now.getTime() - hoursAgo * 3600000).toISOString().replace('T', ' ').slice(0, 16)
+      attendanceLogs.push({
+        id: `mov-out-${i + 1}`,
+        resident_id: res.id,
+        resident_name: res.application?.full_name || 'Resident',
+        room_no: res.bed?.room?.room_no || '—',
+        bed_label: res.bed?.bed_label,
+        direction: 'OUT',
+        time: movTime,
+        note: outReasons[i % outReasons.length],
+        recorded_by: 'Kiosk Automated Punch'
+      })
+    }
 
-  // Add sample IN check-in records for residents who returned earlier today
-  for (let i = 7; i < 15; i++) {
-    const res = residents[i]
-    const hoursAgo = (i - 5) * 0.8
-    const movTime = new Date(now.getTime() - hoursAgo * 3600000).toISOString().replace('T', ' ').slice(0, 16)
-    attendanceLogs.push({
-      id: `mov-in-${i + 1}`,
-      resident_id: res.id,
-      resident_name: res.application?.full_name || 'Resident',
-      room_no: res.bed?.room?.room_no || '—',
-      bed_label: res.bed?.bed_label,
-      direction: 'IN',
-      time: movTime,
-      note: 'Normal Entry - Regular Return',
-      recorded_by: 'Kiosk Automated Punch'
-    })
+    // Add sample IN check-in records for residents who returned earlier today
+    for (let i = 7; i < 15; i++) {
+      const res = residents[i]
+      const hoursAgo = (i - 5) * 0.8
+      const movTime = new Date(now.getTime() - hoursAgo * 3600000).toISOString().replace('T', ' ').slice(0, 16)
+      attendanceLogs.push({
+        id: `mov-in-${i + 1}`,
+        resident_id: res.id,
+        resident_name: res.application?.full_name || 'Resident',
+        room_no: res.bed?.room?.room_no || '—',
+        bed_label: res.bed?.bed_label,
+        direction: 'IN',
+        time: movTime,
+        note: 'Normal Entry - Regular Return',
+        recorded_by: 'Kiosk Automated Punch'
+      })
+    }
   }
 
   return {

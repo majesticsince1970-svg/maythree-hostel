@@ -233,7 +233,7 @@ export function AttendanceKioskPage() {
 
         {/* Info Hint */}
         <div className="max-w-xs mx-auto pt-2 text-center text-xs text-neutral-500">
-          Tip: Enter your 4-digit PIN (e.g. 1001-1075 or last 4 digits of mobile)
+          Tip: Enter your 4-digit PIN or last 4 digits of mobile
         </div>
       </div>
 

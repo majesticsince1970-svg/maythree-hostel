@@ -39,137 +39,25 @@ export interface VacateResidentParams {
 }
 
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
-const STORAGE_KEY = 'mythree_hostel_state_v7'
+const STORAGE_KEY = 'mythree_hostel_state_v9'
 
-// ── Interconnected Seed Data Generation (169 beds, 75 occupied, 94 vacant, 75 active residents, connected attendance) ──
-const seedData = generateCompleteHostelData(seedRoomTypes)
+// ── Clean Hostel Data: 169 beds, 0 occupied, 169 vacant, 0 active residents, structure strictly preserved ──
+const seedData = generateCompleteHostelData(seedRoomTypes, false)
 const initialRoomTypes: RoomType[] = seedRoomTypes
 const flats: Flat[] = seedFlats
 const acRoomIds: Set<string> = seedAcRoomIds
 const initRooms: Room[] = seedData.rooms
 const initBeds: Bed[] = seedData.beds
-const initApplications: Application[] = seedData.applications
-const initResidents: Resident[] = seedData.residents
-const initPayments: Payment[] = seedData.payments
-const initAttendanceLogs: AttendanceMovement[] = seedData.attendanceLogs
+const initApplications: Application[] = []
+const initResidents: Resident[] = []
+const initPayments: Payment[] = []
+const initAttendanceLogs: AttendanceMovement[] = []
 
-// ── Initial Vacated Residents (Departure Log) ──
-const initVacatedResidents: VacatedResident[] = [
-  {
-    id: 'vac-1',
-    resident_id: 'res-old-1',
-    resident_name: 'Ananya Sharma',
-    room_no: '202',
-    bed_label: 'B',
-    admission_date: '2026-05-10',
-    vacate_date: '2026-10-15',
-    reason: 'Completed internship in Chennai',
-    notes: 'Handover complete. Keys returned.',
-    pending_dues: 0,
-    deposit_amount: 16000,
-    deductions: 500,
-    settlement_amount: 15500,
-    settlement_type: 'refund',
-    account_id: 'ca-4',
-    receipt_no: 'CKR-2026-0001',
-    advance_status: 'Returned',
-    payment_mode: 'bank',
-    rent_breakdown: [
-      { month: '2026-10', label: 'October 2026 (1-15 Oct, 15 days)', rent_due: 0, amount_paid: 0, balance: 0, days_stayed: 15, total_days: 31 }
-    ],
-    deductions_breakdown: [
-      { id: 'd-1', description: 'Room cleaning & key replacement', amount: 500 }
-    ],
-    processed_by: 'Admin User',
-    created_at: '2026-10-15T11:30:00Z'
-  },
-  {
-    id: 'vac-2',
-    resident_id: 'res-old-2',
-    resident_name: 'Pooja Hegde',
-    room_no: '305',
-    bed_label: 'A',
-    admission_date: '2026-06-01',
-    vacate_date: '2026-09-30',
-    reason: 'Job relocation to Bengaluru',
-    notes: 'Settled dues in full',
-    pending_dues: 2000,
-    deposit_amount: 10000,
-    deductions: 0,
-    settlement_amount: 8000,
-    settlement_type: 'refund',
-    account_id: 'ca-5',
-    receipt_no: 'CKR-2026-0002',
-    advance_status: 'Returned',
-    payment_mode: 'UPI',
-    rent_breakdown: [
-      { month: '2026-09', label: 'September 2026', rent_due: 10000, amount_paid: 8000, balance: 2000 }
-    ],
-    deductions_breakdown: [],
-    processed_by: 'Staff User',
-    created_at: '2026-09-30T16:00:00Z'
-  }
-]
+// ── Vacated Residents (Departure Log) ──
+const initVacatedResidents: VacatedResident[] = []
 
-// ── Initial Checkout Receipts ──
-const initCheckoutReceipts: CheckoutReceipt[] = [
-  {
-    id: 'ckr-1',
-    receipt_no: 'CKR-2026-0001',
-    vacated_id: 'vac-1',
-    resident_id: 'res-old-1',
-    resident_name: 'Ananya Sharma',
-    phone: '9876543210',
-    room_no: '202',
-    bed_label: 'B',
-    admission_date: '2026-05-10',
-    checkout_date: '2026-10-15',
-    advance_amount: 16000,
-    pending_rent_deducted: 0,
-    other_deductions: 500,
-    final_refund_amount: 15500,
-    settlement_type: 'refund',
-    amount_in_words: 'Rupees Fifteen Thousand Five Hundred Only',
-    payment_mode: 'bank',
-    account_id: 'ca-4',
-    rent_breakdown: [
-      { month: '2026-10', label: 'October 2026 (1-15 Oct, 15 days)', rent_due: 0, amount_paid: 0, balance: 0, days_stayed: 15, total_days: 31 }
-    ],
-    deductions_breakdown: [
-      { id: 'd-1', description: 'Room cleaning & key replacement', amount: 500 }
-    ],
-    notes: 'Handover complete. Keys returned.',
-    issued_by: 'Admin User',
-    created_at: '2026-10-15T11:30:00Z'
-  },
-  {
-    id: 'ckr-2',
-    receipt_no: 'CKR-2026-0002',
-    vacated_id: 'vac-2',
-    resident_id: 'res-old-2',
-    resident_name: 'Pooja Hegde',
-    phone: '9876543220',
-    room_no: '305',
-    bed_label: 'A',
-    admission_date: '2026-06-01',
-    checkout_date: '2026-09-30',
-    advance_amount: 10000,
-    pending_rent_deducted: 2000,
-    other_deductions: 0,
-    final_refund_amount: 8000,
-    settlement_type: 'refund',
-    amount_in_words: 'Rupees Eight Thousand Only',
-    payment_mode: 'UPI',
-    account_id: 'ca-5',
-    rent_breakdown: [
-      { month: '2026-09', label: 'September 2026', rent_due: 10000, amount_paid: 8000, balance: 2000 }
-    ],
-    deductions_breakdown: [],
-    notes: 'Settled dues in full',
-    issued_by: 'Staff User',
-    created_at: '2026-09-30T16:00:00Z'
-  }
-]
+// ── Checkout Receipts ──
+const initCheckoutReceipts: CheckoutReceipt[] = []
 
 // ── Expense categories ──
 const demoExpenseCategories: ExpenseCategory[] = [
@@ -186,88 +74,41 @@ const demoExpenseCategories: ExpenseCategory[] = [
 ]
 
 // ── Vendors ──
-const initVendors: Vendor[] = [
-  { id: 'v-1', name: 'Fresh Grocery Store', phone: '9876500001', default_category_id: 'ec-1' },
-  { id: 'v-2', name: 'Milk Dairy Supplier', phone: '9876500002', default_category_id: 'ec-1' },
-  { id: 'v-3', name: 'HP Gas Agency', phone: '9876500003', default_category_id: 'ec-2' },
-  { id: 'v-4', name: 'City Electricals', phone: '9876500004', default_category_id: 'ec-3' },
-]
+const initVendors: Vendor[] = []
 
 // ── Expenses ──
-const initExpenses: Expense[] = [
-  { id: 'exp-1', expense_date: '2026-10-29', category_id: 'ec-1', vendor_id: 'v-1', description: 'Vegetables and fruits', amount: 2500, paid_from: 'petty_cash', bill_no: 'B001', bill_photo_path: null, recorded_by: 'demo-staff-1', status: 'approved', approved_by: 'demo-admin-1', category: demoExpenseCategories[0], vendor: initVendors[0] },
-  { id: 'exp-2', expense_date: '2026-10-28', category_id: 'ec-1', vendor_id: 'v-2', description: 'Milk - 20 litres', amount: 1200, paid_from: 'petty_cash', bill_no: 'B002', bill_photo_path: null, recorded_by: 'demo-staff-1', status: 'approved', approved_by: 'demo-admin-1', category: demoExpenseCategories[0], vendor: initVendors[1] },
-  { id: 'exp-3', expense_date: '2026-10-27', category_id: 'ec-2', vendor_id: 'v-3', description: 'LPG cylinder refill x2', amount: 1800, paid_from: 'petty_cash', bill_no: null, bill_photo_path: null, recorded_by: 'demo-staff-1', status: 'recorded', approved_by: null, category: demoExpenseCategories[1], vendor: initVendors[2] },
-  { id: 'exp-4', expense_date: '2026-10-25', category_id: 'ec-3', vendor_id: null, description: 'Electricity bill - October', amount: 45000, paid_from: 'bank', bill_no: 'EB-OCT', bill_photo_path: null, recorded_by: 'demo-admin-1', status: 'approved', approved_by: 'demo-admin-1', category: demoExpenseCategories[2] },
-]
+const initExpenses: Expense[] = []
 
-// ── Cash Accounts (All 5 Ledgers: Petty Cash, Store Counter, Rent Cash, Bank, UPI) ──
+// ── Cash Accounts (All 5 Ledgers preserved, balances reset to 0) ──
 const initCashAccounts: CashAccount[] = [
-  { id: 'ca-1', name: 'Petty Cash', kind: 'petty_cash', float_limit: 50000, is_active: true, balance: 23500 },
-  { id: 'ca-2', name: 'Store Counter', kind: 'store_counter', float_limit: 10000, is_active: true, balance: 4750 },
-  { id: 'ca-3', name: 'Rent Cash', kind: 'rent_collection', float_limit: null, is_active: true, balance: 13500 },
-  { id: 'ca-4', name: 'Hostel Bank Account', kind: 'bank', float_limit: null, is_active: true, balance: 145000 },
-  { id: 'ca-5', name: 'Hostel UPI Account', kind: 'upi', float_limit: null, is_active: true, balance: 48000 },
+  { id: 'ca-1', name: 'Petty Cash', kind: 'petty_cash', float_limit: 50000, is_active: true, balance: 0 },
+  { id: 'ca-2', name: 'Store Counter', kind: 'store_counter', float_limit: 10000, is_active: true, balance: 0 },
+  { id: 'ca-3', name: 'Rent Cash', kind: 'rent_collection', float_limit: null, is_active: true, balance: 0 },
+  { id: 'ca-4', name: 'Hostel Bank Account', kind: 'bank', float_limit: null, is_active: true, balance: 0 },
+  { id: 'ca-5', name: 'Hostel UPI Account', kind: 'upi', float_limit: null, is_active: true, balance: 0 },
 ]
 
 // ── Initial Cash Transactions across all accounts ──
-const initCashTransactions: CashTransaction[] = [
-  { id: 'ct-init-1', account_id: 'ca-1', txn_date: '2026-10-29', direction: 'out', amount: 2500, source: 'expense', source_id: 'exp-1', note: 'Vegetables and fruits', recorded_by: 'demo-staff-1' },
-  { id: 'ct-init-2', account_id: 'ca-3', txn_date: '2026-10-29', direction: 'in', amount: 10000, source: 'rent_payment', source_id: 'pay-2', note: 'Rent payment RCT-002 (Cash) - Meera Iyer', recorded_by: 'demo-staff-1' },
-  { id: 'ct-init-3', account_id: 'ca-1', txn_date: '2026-10-28', direction: 'out', amount: 1200, source: 'expense', source_id: 'exp-2', note: 'Milk - 20 litres', recorded_by: 'demo-staff-1' },
-  { id: 'ct-init-4', account_id: 'ca-2', txn_date: '2026-10-28', direction: 'in', amount: 750, source: 'store_sale', source_id: 'sale-1', note: 'Store sale (Cash) - Snacks & essentials', recorded_by: 'demo-store-1' },
-  { id: 'ct-init-5', account_id: 'ca-5', txn_date: '2026-10-28', direction: 'in', amount: 500, source: 'store_sale', source_id: 'sale-2', note: 'Store sale (UPI) - Magic Tumbler order', recorded_by: 'demo-store-1' },
-  { id: 'ct-init-6', account_id: 'ca-5', txn_date: '2026-10-26', direction: 'in', amount: 8000, source: 'rent_payment', source_id: 'pay-1', note: 'Rent payment RCT-001 (UPI) - Kavya Nair', recorded_by: 'demo-staff-1' },
-  { id: 'ct-init-7', account_id: 'ca-4', txn_date: '2026-10-25', direction: 'out', amount: 45000, source: 'expense', source_id: 'exp-4', note: 'Electricity bill - October (Direct Bank Transfer)', recorded_by: 'demo-admin-1' },
-  { id: 'ct-init-8', account_id: 'ca-3', txn_date: '2026-10-24', direction: 'in', amount: 3500, source: 'rent_payment', source_id: 'pay-4', note: 'Rent payment RCT-004 (Cash partial) - Roshni Das', recorded_by: 'demo-staff-1' },
-]
+const initCashTransactions: CashTransaction[] = []
 
-// ── Products (Including Magic Tumbler) ──
+// ── Products (9 core catalog products preserved with stock set strictly to 0) ──
 const initProducts: Product[] = [
-  { id: 'prod-magic-tumbler', name: 'Magic Tumbler', category: 'Hostel Essentials', unit: 'piece', barcode: '8901234567899', cost_price: 180, selling_price: 250, reorder_level: 10, is_active: true, stock_on_hand: 25 },
-  { id: 'prod-1', name: 'Maggi Noodles', category: 'Snacks', unit: 'packet', barcode: '8901234567890', cost_price: 12, selling_price: 15, reorder_level: 20, is_active: true, stock_on_hand: 45 },
-  { id: 'prod-2', name: 'Lays Chips (Classic)', category: 'Snacks', unit: 'packet', barcode: '8901234567891', cost_price: 16, selling_price: 20, reorder_level: 15, is_active: true, stock_on_hand: 32 },
-  { id: 'prod-3', name: 'Dove Soap', category: 'Toiletries', unit: 'piece', barcode: '8901234567892', cost_price: 45, selling_price: 55, reorder_level: 10, is_active: true, stock_on_hand: 18 },
-  { id: 'prod-4', name: 'Bisleri Water (1L)', category: 'Drinks', unit: 'bottle', barcode: '8901234567893', cost_price: 15, selling_price: 20, reorder_level: 30, is_active: true, stock_on_hand: 8 },
-  { id: 'prod-5', name: 'Notebook (200 pages)', category: 'Stationery', unit: 'piece', barcode: '8901234567894', cost_price: 30, selling_price: 40, reorder_level: 10, is_active: true, stock_on_hand: 25 },
-  { id: 'prod-6', name: 'Pen (Blue)', category: 'Stationery', unit: 'piece', barcode: null, cost_price: 5, selling_price: 10, reorder_level: 20, is_active: true, stock_on_hand: 50 },
-  { id: 'prod-7', name: 'Coca Cola (300ml)', category: 'Drinks', unit: 'bottle', barcode: '8901234567896', cost_price: 25, selling_price: 30, reorder_level: 20, is_active: true, stock_on_hand: 15 },
-  { id: 'prod-8', name: 'Colgate Toothpaste', category: 'Toiletries', unit: 'tube', barcode: '8901234567897', cost_price: 60, selling_price: 75, reorder_level: 8, is_active: true, stock_on_hand: 12 },
+  { id: '44444444-4444-4444-4444-444444444401', name: 'Maggi Noodles', category: 'Snacks', unit: 'packet', barcode: '8901234567890', cost_price: 12.00, selling_price: 15.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444402', name: 'Lays Chips (Classic)', category: 'Snacks', unit: 'packet', barcode: '8901234567891', cost_price: 16.00, selling_price: 20.00, reorder_level: 15, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444403', name: 'Dove Soap', category: 'Toiletries', unit: 'piece', barcode: '8901234567892', cost_price: 45.00, selling_price: 55.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444404', name: 'Bisleri Water (1L)', category: 'Drinks', unit: 'bottle', barcode: '8901234567893', cost_price: 14.00, selling_price: 20.00, reorder_level: 30, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444405', name: 'Notebook (200 pages)', category: 'Stationery', unit: 'piece', barcode: '8901234567894', cost_price: 28.00, selling_price: 40.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444406', name: 'Pen (Blue)', category: 'Stationery', unit: 'piece', barcode: '8901234567895', cost_price: 5.00, selling_price: 10.00, reorder_level: 25, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444407', name: 'Coca Cola (300ml)', category: 'Drinks', unit: 'bottle', barcode: '8901234567896', cost_price: 22.00, selling_price: 30.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444408', name: 'Colgate Toothpaste', category: 'Toiletries', unit: 'piece', barcode: '8901234567897', cost_price: 58.00, selling_price: 75.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '55555555-5555-5555-5555-555555555501', name: 'Magic Tumbler', category: 'Hostel Essentials', unit: 'piece', barcode: '8901234567898', cost_price: 180.00, selling_price: 250.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
 ]
 
-// ── Initial Store Sales (including Magic Tumbler order) ──
-const initSales: Sale[] = [
-  {
-    id: 'sale-init-1',
-    sale_date: '2026-10-28',
-    sold_by: 'demo-store-1',
-    resident_id: 'res-2',
-    payment_mode: 'UPI',
-    total: 500,
-    items: [
-      { id: 'si-init-1', sale_id: 'sale-init-1', product_id: 'prod-magic-tumbler', qty: 2, unit_price: 250, unit_cost: 180, product: initProducts[0] }
-    ]
-  },
-  {
-    id: 'sale-init-2',
-    sale_date: '2026-10-28',
-    sold_by: 'demo-store-1',
-    resident_id: null,
-    payment_mode: 'cash',
-    total: 75,
-    items: [
-      { id: 'si-init-2', sale_id: 'sale-init-2', product_id: 'prod-1', qty: 3, unit_price: 15, unit_cost: 12, product: initProducts[1] },
-      { id: 'si-init-3', sale_id: 'sale-init-2', product_id: 'prod-7', qty: 1, unit_price: 30, unit_cost: 25, product: initProducts[7] }
-    ]
-  }
-]
+// ── Store Sales ──
+const initSales: Sale[] = []
 
-// ── Initial Stock Movements ──
-const initStockMovements: StockMovement[] = [
-  { id: 'sm-init-1', product_id: 'prod-magic-tumbler', date: '2026-10-28', type: 'sale', qty: -2, ref_id: 'sale-init-1' },
-  { id: 'sm-init-2', product_id: 'prod-1', date: '2026-10-28', type: 'sale', qty: -3, ref_id: 'sale-init-2' },
-  { id: 'sm-init-3', product_id: 'prod-7', date: '2026-10-28', type: 'sale', qty: -1, ref_id: 'sale-init-2' },
-]
+// ── Stock Movements ──
+const initStockMovements: StockMovement[] = []
 
 // ── Staff ──
 const initStaff: StaffProfile[] = [
@@ -279,6 +120,12 @@ const initStaff: StaffProfile[] = [
 // Helper to safely read from localStorage
 function getStoredState() {
   try {
+    // Clean up legacy demo storage keys if present
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('mythree_hostel_state_v8')
+      localStorage.removeItem('mythree_hostel_state_v7')
+      localStorage.removeItem('mythree_hostel_state_v6')
+    }
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     return JSON.parse(raw)
@@ -501,12 +348,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
               const existing = map.get(rp.id)
               map.set(rp.id, {
                 ...rp,
-                stock_on_hand: existing?.stock_on_hand ?? rp.reorder_level ?? 20
+                stock_on_hand: existing?.stock_on_hand ?? 0
               })
-            }
-            // Ensure Magic Tumbler is always present
-            if (!map.has('prod-magic-tumbler')) {
-              map.set('prod-magic-tumbler', initProducts[0])
             }
             return Array.from(map.values())
           })
