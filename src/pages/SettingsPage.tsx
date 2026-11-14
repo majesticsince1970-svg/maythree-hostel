@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency } from '@/lib/utils'
-import { Settings, BedDouble, Users, QrCode, Download, Edit, Plus, Trash2, Snowflake, ArrowRightLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Settings, BedDouble, Users, QrCode, Download, Edit, Plus, Trash2, Snowflake, ArrowRightLeft, ChevronLeft, ChevronRight, Key } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import type { StaffProfile, StaffRole } from '@/types/database'
 
@@ -36,6 +36,7 @@ export function SettingsPage() {
   // Add Staff states
   const [addStaffDialog, setAddStaffDialog] = useState(false)
   const [newStaffName, setNewStaffName] = useState('')
+  const [newStaffUsername, setNewStaffUsername] = useState('')
   const [newStaffEmail, setNewStaffEmail] = useState('')
   const [newStaffPassword, setNewStaffPassword] = useState('')
   const [newStaffRole, setNewStaffRole] = useState<StaffRole>('staff')
@@ -43,9 +44,16 @@ export function SettingsPage() {
   // Edit Staff states
   const [editStaffDialog, setEditStaffDialog] = useState(false)
   const [editStaffName, setEditStaffName] = useState('')
+  const [editStaffUsername, setEditStaffUsername] = useState('')
   const [editStaffEmail, setEditStaffEmail] = useState('')
+  const [editStaffPassword, setEditStaffPassword] = useState('')
   const [editStaffRole, setEditStaffRole] = useState<StaffRole>('staff')
   const [editStaffUserId, setEditStaffUserId] = useState('')
+
+  // Reset Password states
+  const [resetPwdDialog, setResetPwdDialog] = useState(false)
+  const [resetPwdStaff, setResetPwdStaff] = useState<StaffProfile | null>(null)
+  const [newPasswordVal, setNewPasswordVal] = useState('')
 
   // Room config states
   const [roomConfigDialog, setRoomConfigDialog] = useState(false)
@@ -83,16 +91,22 @@ export function SettingsPage() {
 
   const handleAddStaff = () => {
     if (!newStaffName || !newStaffEmail || !newStaffPassword) return
+    const cleanEmail = newStaffEmail.trim().toLowerCase()
+    const cleanUsername = newStaffUsername.trim().toLowerCase() || cleanEmail.split('@')[0]
     const newStaffProfile: StaffProfile = {
       user_id: `staff-${Date.now()}`,
-      name: newStaffName,
-      email: newStaffEmail,
+      name: newStaffName.trim(),
+      email: cleanEmail,
+      username: cleanUsername,
+      password: newStaffPassword,
       role: newStaffRole,
+      created_at: new Date().toISOString()
     }
     addStaff(newStaffProfile)
-    addToast({ type: 'success', title: 'Staff account created', description: `${newStaffName} (${newStaffRole})` })
+    addToast({ type: 'success', title: 'Staff account created', description: `${newStaffName} (${newStaffRole}) - Login credentials active` })
     setAddStaffDialog(false)
     setNewStaffName('')
+    setNewStaffUsername('')
     setNewStaffEmail('')
     setNewStaffPassword('')
     setNewStaffRole('staff')
@@ -100,14 +114,33 @@ export function SettingsPage() {
 
   const handleEditStaff = () => {
     if (!editStaffName || !editStaffEmail) return
-    updateStaff(editStaffUserId, { name: editStaffName, email: editStaffEmail, role: editStaffRole })
+    const cleanEmail = editStaffEmail.trim().toLowerCase()
+    const cleanUsername = editStaffUsername.trim().toLowerCase() || cleanEmail.split('@')[0]
+    const updates: Partial<StaffProfile> = {
+      name: editStaffName.trim(),
+      email: cleanEmail,
+      username: cleanUsername,
+      role: editStaffRole
+    }
+    if (editStaffPassword.trim()) {
+      updates.password = editStaffPassword.trim()
+    }
+    updateStaff(editStaffUserId, updates)
     addToast({ type: 'success', title: 'Staff account updated', description: `${editStaffName}` })
     setEditStaffDialog(false)
   }
 
+  const handleResetPassword = () => {
+    if (!resetPwdStaff || !newPasswordVal.trim()) return
+    updateStaff(resetPwdStaff.user_id, { password: newPasswordVal.trim() })
+    addToast({ type: 'success', title: 'Password updated', description: `Login password set for ${resetPwdStaff.name}` })
+    setResetPwdDialog(false)
+    setNewPasswordVal('')
+  }
+
   const handleDeleteStaff = (staff: StaffProfile) => {
-    if (staff.role === 'admin' && staffList.filter(s => s.role === 'admin').length <= 1) {
-      addToast({ type: 'error', title: 'Cannot delete the only admin' })
+    if (staff.email === 'admin@maythree.com' || (staff.role === 'admin' && staffList.filter(s => s.role === 'admin').length <= 1)) {
+      addToast({ type: 'error', title: 'Cannot delete the main admin account' })
       return
     }
     removeStaff(staff.user_id)
@@ -117,9 +150,17 @@ export function SettingsPage() {
   const openEditStaff = (staff: StaffProfile) => {
     setEditStaffUserId(staff.user_id)
     setEditStaffName(staff.name)
+    setEditStaffUsername(staff.username || (staff.email ? staff.email.split('@')[0] : ''))
     setEditStaffEmail(staff.email || '')
+    setEditStaffPassword(staff.password || '')
     setEditStaffRole(staff.role)
     setEditStaffDialog(true)
+  }
+
+  const openResetPassword = (staff: StaffProfile) => {
+    setResetPwdStaff(staff)
+    setNewPasswordVal(staff.password || 'admin123')
+    setResetPwdDialog(true)
   }
 
   const handleRoomConfig = () => {
@@ -329,8 +370,9 @@ export function SettingsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
+                    <TableHead>Username / Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Login Access</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -338,20 +380,37 @@ export function SettingsPage() {
                   {staffList.map((staff) => (
                     <TableRow key={staff.user_id}>
                       <TableCell className="font-medium">{staff.name}</TableCell>
-                      <TableCell>{staff.email}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs text-foreground font-semibold">
+                            {staff.username || (staff.email ? staff.email.split('@')[0] : '—')}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{staff.email || '—'}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={staff.role === 'admin' ? 'default' : staff.role === 'staff' ? 'secondary' : 'outline'}>
                           {staff.role.replace('_', ' ')}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <span className="inline-flex items-center text-xs font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Active · Ready
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openResetPassword(staff)} title="Change or Reset Login Password">
+                            <Key className="h-4 w-4 mr-1 text-amber-600" /> Password
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => openEditStaff(staff)}>
                             <Edit className="h-4 w-4 mr-1" /> Edit
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteStaff(staff)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {staff.email !== 'admin@maythree.com' && (
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteStaff(staff)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -526,22 +585,30 @@ export function SettingsPage() {
         <div className="space-y-4">
           <div>
             <Label>Full Name *</Label>
-            <Input value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} placeholder="Enter name" className="mt-1" />
+            <Input value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} placeholder="e.g. Anjali Nair" className="mt-1" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Username</Label>
+              <Input value={newStaffUsername} onChange={(e) => setNewStaffUsername(e.target.value)} placeholder="e.g. anjali" className="mt-1" />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Used for quick sign-in</p>
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="anjali@maythree.com" className="mt-1" />
+            </div>
           </div>
           <div>
-            <Label>Email *</Label>
-            <Input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="name@mythreehostels.com" className="mt-1" />
-          </div>
-          <div>
-            <Label>Password *</Label>
-            <Input type="password" value={newStaffPassword} onChange={(e) => setNewStaffPassword(e.target.value)} placeholder="Minimum 6 characters" className="mt-1" />
+            <Label>Login Password *</Label>
+            <Input type="text" value={newStaffPassword} onChange={(e) => setNewStaffPassword(e.target.value)} placeholder="Password for login (e.g. staff123)" className="mt-1" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Used immediately to authenticate on the login screen</p>
           </div>
           <div>
             <Label>Role *</Label>
             <select value={newStaffRole} onChange={(e) => setNewStaffRole(e.target.value as StaffRole)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
-              <option value="staff">Hostel Staff</option>
-              <option value="admin">Corporate Admin</option>
-              <option value="store_staff">Store Staff</option>
+              <option value="staff">Hostel Staff (Admissions, Rooms, Attendance)</option>
+              <option value="admin">Corporate Admin (Full Privileges)</option>
+              <option value="store_staff">Store Staff (POS & Canteen Inventory)</option>
             </select>
           </div>
         </div>
@@ -561,9 +628,19 @@ export function SettingsPage() {
             <Label>Full Name *</Label>
             <Input value={editStaffName} onChange={(e) => setEditStaffName(e.target.value)} className="mt-1" />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Username</Label>
+              <Input value={editStaffUsername} onChange={(e) => setEditStaffUsername(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={editStaffEmail} onChange={(e) => setEditStaffEmail(e.target.value)} className="mt-1" />
+            </div>
+          </div>
           <div>
-            <Label>Email *</Label>
-            <Input type="email" value={editStaffEmail} onChange={(e) => setEditStaffEmail(e.target.value)} className="mt-1" />
+            <Label>Update Password (leave blank to keep current)</Label>
+            <Input type="text" value={editStaffPassword} onChange={(e) => setEditStaffPassword(e.target.value)} placeholder="Enter new password to change" className="mt-1" />
           </div>
           <div>
             <Label>Role *</Label>
@@ -577,6 +654,41 @@ export function SettingsPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setEditStaffDialog(false)}>Cancel</Button>
           <Button onClick={handleEditStaff} disabled={!editStaffName || !editStaffEmail}>Save Changes</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPwdDialog} onClose={() => setResetPwdDialog(false)}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5 text-amber-600" /> Reset Login Password
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="p-3 bg-muted rounded-lg text-xs space-y-1">
+            <p><strong>Staff:</strong> {resetPwdStaff?.name}</p>
+            <p><strong>Username:</strong> <span className="font-mono">{resetPwdStaff?.username || (resetPwdStaff?.email ? resetPwdStaff.email.split('@')[0] : '—')}</span></p>
+            <p><strong>Email:</strong> {resetPwdStaff?.email}</p>
+          </div>
+          <div>
+            <Label>New Login Password *</Label>
+            <Input
+              type="text"
+              value={newPasswordVal}
+              onChange={(e) => setNewPasswordVal(e.target.value)}
+              placeholder="e.g. staff123"
+              className="mt-1 font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              The user will be able to sign in immediately using this password with either their username or email.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setResetPwdDialog(false)}>Cancel</Button>
+          <Button onClick={handleResetPassword} disabled={!newPasswordVal.trim()}>
+            Save Password
+          </Button>
         </DialogFooter>
       </Dialog>
 

@@ -39,6 +39,21 @@ export function LoginPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
 
+  // Reset lockout helper
+  const resetLockout = () => {
+    sessionStorage.removeItem('login_failed_attempts')
+    sessionStorage.removeItem('login_lockout_until')
+    setFailedAttempts(0)
+    setLockoutUntil(null)
+    setRemainingSeconds(0)
+    setError('')
+  }
+
+  // Clear existing lockout on initial component mount as requested
+  useEffect(() => {
+    resetLockout()
+  }, [])
+
   // Lockout countdown timer
   useEffect(() => {
     if (!lockoutUntil) {
@@ -120,14 +135,25 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
             {/* Lockout Warning Banner */}
             {isLockedOut && (
-              <div className="flex items-start gap-2.5 p-3.5 bg-destructive/15 text-destructive rounded-xl text-xs font-semibold border border-destructive/30 animate-pulse">
-                <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-                <div>
-                  <p>Security Lockout Active</p>
-                  <p className="text-[11px] font-normal mt-0.5">
-                    Too many consecutive failed attempts. Please wait <strong className="font-mono">{remainingSeconds}s</strong> before trying again.
-                  </p>
+              <div className="flex flex-col gap-2 p-3.5 bg-destructive/15 text-destructive rounded-xl text-xs font-semibold border border-destructive/30">
+                <div className="flex items-start gap-2.5">
+                  <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
+                  <div>
+                    <p>Security Lockout Active</p>
+                    <p className="text-[11px] font-normal mt-0.5">
+                      Too many consecutive failed attempts. Wait <strong className="font-mono">{remainingSeconds}s</strong> or reset below.
+                    </p>
+                  </div>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 mt-1"
+                  onClick={resetLockout}
+                >
+                  Reset Lockout Counter
+                </Button>
               </div>
             )}
 
@@ -139,20 +165,20 @@ export function LoginPage() {
               </div>
             )}
 
-            {/* Email Field - Empty by default, manual input */}
+            {/* Email / Username Field - supports both username or email */}
             <div>
               <Label htmlFor="email" className="text-xs font-semibold flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                Email / Username
+                Username or Email Address
               </Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@mythreehostels.com"
+                placeholder="admin@maythree.com or username"
                 className="mt-1 text-xs h-9"
-                autoComplete="off"
+                autoComplete="username"
                 disabled={loading || isLockedOut}
                 required
               />

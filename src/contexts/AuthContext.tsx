@@ -2,13 +2,18 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { StaffProfile } from '@/types/database'
 import type { User, Session } from '@supabase/supabase-js'
+import {
+  findAuthUserByIdentifier,
+  getStoredAuthUsers,
+  DEFAULT_AUTH_USERS
+} from '@/lib/authStore'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   profile: StaffProfile | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>
+  signIn: (identifier: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   switchRole: (role: 'admin' | 'staff' | 'store_staff') => void
   isAdmin: boolean
@@ -18,36 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Demo mode data for when Supabase is not configured
 const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
-
-const DEMO_USERS: Record<string, { password: string; profile: StaffProfile }> = {
-  'admin@mythreehostels.com': {
-    password: 'admin123',
-    profile: { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' }
-  },
-  'staff@mythreehostels.com': {
-    password: 'staff123',
-    profile: { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' }
-  },
-  'store@mythreehostels.com': {
-    password: 'store123',
-    profile: { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' }
-  },
-  // Legacy aliases for backward compatibility
-  'admin@maythree.com': {
-    password: 'admin123',
-    profile: { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' }
-  },
-  'staff@maythree.com': {
-    password: 'staff123',
-    profile: { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' }
-  },
-  'store@maythree.com': {
-    password: 'store123',
-    profile: { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' }
-  }
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -56,39 +32,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (DEMO_MODE) {
-      // Check localStorage for demo session
-      const savedEmail = localStorage.getItem('demo_user_email')
-      if (savedEmail && DEMO_USERS[savedEmail]) {
-        setProfile(DEMO_USERS[savedEmail].profile)
-        setUser({ id: DEMO_USERS[savedEmail].profile.user_id, email: savedEmail } as User)
+    // 1. Check for active local authenticated session
+    const savedActiveUser = typeof localStorage !== 'undefined' ? localStorage.getItem('mythree_active_user') : null
+    if (savedActiveUser) {
+      try {
+        const parsed: StaffProfile = JSON.parse(savedActiveUser)
+        if (parsed && parsed.user_id) {
+          setProfile(parsed)
+          setUser({ id: parsed.user_id, email: parsed.email || `${parsed.username}@maythree.com` } as User)
+          setLoading(false)
+          return
+        }
+      } catch (e) {
+        localStorage.removeItem('mythree_active_user')
       }
-      setLoading(false)
-      return
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
+    // 2. Fallback to Supabase session if configured
+    if (!DEMO_MODE) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session)
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          fetchProfile(session.user.id)
+        } else {
+          setLoading(false)
+        }
+      }).catch(() => setLoading(false))
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setProfile(null)
-        setLoading(false)
-      }
-    })
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session)
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          fetchProfile(session.user.id)
+        } else {
+          setProfile(null)
+          setLoading(false)
+        }
+      })
 
-    return () => subscription.unsubscribe()
+      return () => subscription.unsubscribe()
+    } else {
+      setLoading(false)
+    }
   }, [])
 
   async function fetchProfile(userId: string) {
@@ -98,7 +84,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .eq('user_id', userId)
         .single()
-      setProfile(data as StaffProfile | null)
+      if (data) {
+        setProfile(data as StaffProfile)
+      } else {
+        // Fallback to local profile match
+        const local = getStoredAuthUsers().find(u => u.user_id === userId)
+        setProfile(local || null)
+      }
     } catch {
       setProfile(null)
     } finally {
@@ -106,49 +98,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signIn = async (email: string, password: string) => {
-    const cleanEmail = email.trim().toLowerCase()
-    if (DEMO_MODE) {
-      const demoUser = DEMO_USERS[cleanEmail]
-      if (demoUser && demoUser.password === password) {
-        localStorage.setItem('demo_user_email', cleanEmail)
-        setProfile(demoUser.profile)
-        setUser({ id: demoUser.profile.user_id, email: cleanEmail } as User)
-        return { error: null }
+  const signIn = async (identifier: string, password: string) => {
+    const clean = identifier.trim().toLowerCase()
+
+    // 1. Check unified staff credential store (covers all users created in Settings + default admin)
+    const localUser = findAuthUserByIdentifier(clean)
+    if (localUser && localUser.password === password) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mythree_active_user', JSON.stringify(localUser))
       }
-      return { error: new Error('Invalid username or password') }
+      setProfile(localUser)
+      setUser({ id: localUser.user_id, email: localUser.email || `${localUser.username}@maythree.com` } as User)
+      return { error: null }
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password })
-    if (error) {
-      console.warn('[Auth] Authentication failed for provided credentials')
-      return { error: new Error('Invalid username or password') }
+    // 2. If not matched in local auth store or wrong password, attempt Supabase authentication
+    if (!DEMO_MODE) {
+      const emailToTry = localUser?.email || (clean.includes('@') ? clean : `${clean}@maythree.com`)
+      try {
+        const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
+          email: emailToTry,
+          password
+        })
+
+        if (!supaError && supaData?.user) {
+          setUser(supaData.user)
+          setSession(supaData.session)
+          await fetchProfile(supaData.user.id)
+          return { error: null }
+        }
+      } catch (err) {
+        console.warn('[Auth] Supabase auth attempt failed:', err)
+      }
     }
-    return { error: null }
+
+    return { error: new Error('Invalid username or password') }
   }
 
   const signOut = async () => {
-    if (DEMO_MODE) {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('mythree_active_user')
       localStorage.removeItem('demo_user_email')
-      setUser(null)
-      setProfile(null)
-      return
     }
-    await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
+    setProfile(null)
+    if (!DEMO_MODE) {
+      await supabase.auth.signOut().catch(() => {})
+    }
   }
 
   const switchRole = (role: 'admin' | 'staff' | 'store_staff') => {
-    const emailByRole: Record<'admin' | 'staff' | 'store_staff', string> = {
-      admin: 'admin@mythreehostels.com',
-      staff: 'staff@mythreehostels.com',
-      store_staff: 'store@mythreehostels.com',
-    }
-    const targetEmail = emailByRole[role]
-    const demo = DEMO_USERS[targetEmail]
-    if (demo) {
-      localStorage.setItem('demo_user_email', targetEmail)
-      setProfile(demo.profile)
-      setUser({ id: demo.profile.user_id, email: targetEmail } as User)
+    const users = getStoredAuthUsers()
+    const target = users.find(u => u.role === role) || DEFAULT_AUTH_USERS.find(u => u.role === role)
+    if (target) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mythree_active_user', JSON.stringify(target))
+      }
+      setProfile(target)
+      setUser({ id: target.user_id, email: target.email || `${target.username}@maythree.com` } as User)
     }
   }
 

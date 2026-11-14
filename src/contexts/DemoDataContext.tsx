@@ -17,6 +17,11 @@ import {
   seedAcRoomIds,
   generateCompleteHostelData
 } from '@/lib/seedDataGenerator'
+import {
+  upsertAuthUser,
+  deleteAuthUser,
+  syncStaffListWithAuthStore
+} from '@/lib/authStore'
 import type { AttendanceMovement } from '@/types/database'
 
 export interface VacateResidentParams {
@@ -237,7 +242,10 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(stored?.stockMovements || initStockMovements)
   const [stockPurchases, setStockPurchases] = useState<StockPurchase[]>(stored?.stockPurchases || [])
   const [stockCounts, setStockCounts] = useState<StockCount[]>(stored?.stockCounts || [])
-  const [staffList, setStaffList] = useState<StaffProfile[]>(stored?.staffList || initStaff)
+  const [staffList, setStaffList] = useState<StaffProfile[]>(() => {
+    const rawList = stored?.staffList || initStaff
+    return syncStaffListWithAuthStore(rawList)
+  })
   const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>(stored?.vacatedResidents || initVacatedResidents)
   const [checkoutReceipts, setCheckoutReceipts] = useState<CheckoutReceipt[]>(stored?.checkoutReceipts || initCheckoutReceipts)
   const [checkoutRentRule, setCheckoutRentRule] = useState<'per_day' | 'full_month'>(stored?.checkoutRentRule || 'per_day')
@@ -1294,14 +1302,24 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Settings: Staff ──
   const addStaff = useCallback((staff: StaffProfile) => {
-    setStaffList(prev => [...prev, staff])
+    upsertAuthUser(staff)
+    setStaffList(prev => [...prev.filter(s => s.user_id !== staff.user_id), staff])
   }, [])
 
   const updateStaff = useCallback((userId: string, changes: Partial<StaffProfile>) => {
-    setStaffList(prev => prev.map(s => s.user_id === userId ? { ...s, ...changes } : s))
+    setStaffList(prev => {
+      const existing = prev.find(s => s.user_id === userId)
+      if (existing) {
+        const merged: StaffProfile = { ...existing, ...changes }
+        upsertAuthUser(merged)
+        return prev.map(s => s.user_id === userId ? merged : s)
+      }
+      return prev
+    })
   }, [])
 
   const removeStaff = useCallback((userId: string) => {
+    deleteAuthUser(userId)
     setStaffList(prev => prev.filter(s => s.user_id !== userId))
   }, [])
 
