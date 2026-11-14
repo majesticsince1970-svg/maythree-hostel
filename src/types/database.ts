@@ -431,6 +431,7 @@ export interface RentDueView {
   paid: number
   balance: number
   phone: string
+  store_dues?: number
 }
 
 export interface PublicRoomOption {

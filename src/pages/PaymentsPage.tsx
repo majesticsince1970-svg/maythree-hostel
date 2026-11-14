@@ -432,6 +432,7 @@ export function PaymentsPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Room {d.room_no} · Bed {d.bed_label} · Month: {d.period_month} · Monthly Rent: {formatCurrency(d.rent_due)} · Paid: {formatCurrency(d.paid)}
+                        {d.store_dues && d.store_dues > 0 ? ` · Unpaid Store Billed: ${formatCurrency(d.store_dues)}` : ''}
                       </p>
                     </div>
                     <div className="flex gap-2">

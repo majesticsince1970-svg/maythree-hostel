@@ -183,3 +183,4 @@ export function syncStaffListWithAuthStore(staffList: StaffProfile[]): StaffProf
 
   return syncedList
 }
+

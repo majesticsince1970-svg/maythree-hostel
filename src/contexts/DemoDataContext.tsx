@@ -563,7 +563,11 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const currentMonth = new Date().toISOString().slice(0, 7)
     return residents.filter(r => r.status === 'active').map(r => {
       const paid = payments.filter(p => p.resident_id === r.id && p.period_month === currentMonth).reduce((s, p) => s + p.amount, 0)
+      const storeCreditDues = sales
+        .filter(s => s.resident_id === r.id && s.payment_mode === 'on_account')
+        .reduce((s, sl) => s + sl.total, 0)
       const room = rooms.find(rm => rm.id === r.bed?.room_id)
+      const rentBalance = Math.max(0, r.monthly_rent - paid)
       return {
         resident_id: r.id,
         resident_name: r.application?.full_name || 'Unknown',
@@ -572,11 +576,12 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         period_month: currentMonth,
         rent_due: r.monthly_rent,
         paid,
-        balance: r.monthly_rent - paid,
+        balance: rentBalance + storeCreditDues,
+        store_dues: storeCreditDues,
         phone: r.application?.phone || '',
       }
     })
-  }, [residents, payments, rooms])
+  }, [residents, payments, sales, rooms])
 
   // ── Application actions ──
   const addApplication = useCallback(async (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>): Promise<Application> => {
@@ -772,9 +777,10 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!DEMO_MODE) {
-      ;(supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then()
-      ;(supabase as any).from('residents').insert([newResident]).then()
-      ;(supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then()
+      ;(supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then().catch(() => {})
+      const { application: _app, bed: _bed, ...dbResident } = newResident
+      ;(supabase as any).from('residents').insert([dbResident]).then().catch((e: any) => console.warn('[Supabase] resident insert:', e?.message))
+      ;(supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then().catch(() => {})
     }
   }, [applications, beds, rooms, roomTypes, residents, cashAccounts])
 
@@ -790,8 +796,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     setResidents(prev => prev.map(r => r.id === residentId ? { ...r, status: 'checked_out' as const, check_out_date: checkOutDate } : r))
 
     if (!DEMO_MODE) {
-      (supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
-      (supabase as any).from('residents').update({ status: 'checked_out', check_out_date: checkOutDate }).eq('id', residentId).then()
+      ;(supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then().catch(() => {})
+      ;(supabase as any).from('residents').update({ status: 'checked_out', check_out_date: checkOutDate }).eq('id', residentId).then().catch(() => {})
     }
   }, [residents])
 
@@ -932,14 +938,16 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
     // 7. Remote Supabase sync
     if (!DEMO_MODE) {
-      ;(supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then()
+      ;(supabase as any).from('beds').update({ status: 'available' }).eq('id', resident.bed_id).then().catch(() => {})
       ;(supabase as any).from('residents').update({
         status: 'vacated',
         check_out_date: params.vacateDate,
         pin_active: false
-      }).eq('id', resident.id).then()
-      ;(supabase as any).from('vacated_residents').insert([newDeparture]).then()
-      ;(supabase as any).from('checkout_receipts').insert([newReceipt]).then()
+      }).eq('id', resident.id).then().catch(() => {})
+      const { rent_breakdown: _rb, deductions_breakdown: _db, ...dbDeparture } = newDeparture
+      ;(supabase as any).from('vacated_residents').insert([dbDeparture]).then().catch(() => {})
+      const { rent_breakdown: _rrb, deductions_breakdown: _ddb, ...dbReceipt } = newReceipt
+      ;(supabase as any).from('checkout_receipts').insert([dbReceipt]).then().catch(() => {})
     }
 
     return { vacated: newDeparture, receipt: newReceipt }

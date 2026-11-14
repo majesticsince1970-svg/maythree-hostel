@@ -49,7 +49,7 @@ export function ReportsPage() {
     expenseCategories,
     checkoutReceipts
   } = useDemoData()
-  const [selectedMonth, setSelectedMonth] = useState('2026-10')
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [activeTab, setActiveTab] = useState<'financials' | 'checkout_receipts'>('financials')
   const [receiptSearch, setReceiptSearch] = useState('')
   const [selectedReceipt, setSelectedReceipt] = useState<CheckoutReceipt | null>(null)

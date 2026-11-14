@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -40,6 +40,7 @@ export function VacateResidentManager() {
     residents,
     rentDueList,
     payments,
+    sales,
     cashAccounts,
     vacatedResidents,
     checkoutReceipts,
@@ -92,6 +93,30 @@ export function VacateResidentManager() {
     if (!selectedResidentId) return null
     return rentDueList.find(d => d.resident_id === selectedResidentId)
   }, [selectedResidentId, rentDueList])
+
+  const residentStoreDues = useMemo(() => {
+    if (!selectedResidentId) return 0
+    return sales
+      .filter(s => s.resident_id === selectedResidentId && s.payment_mode === 'on_account')
+      .reduce((s, sale) => s + sale.total, 0)
+  }, [selectedResidentId, sales])
+
+  // Automatically add unpaid store dues to deductions if present
+  useEffect(() => {
+    if (selectedResidentId && residentStoreDues > 0) {
+      setDeductionsList(prev => {
+        if (prev.some(d => d.description.includes('Store / Canteen'))) return prev
+        return [
+          ...prev,
+          {
+            id: `store-due-${selectedResidentId}`,
+            description: 'Store / Canteen Unpaid Credit Dues',
+            amount: residentStoreDues
+          }
+        ]
+      })
+    }
+  }, [selectedResidentId, residentStoreDues])
 
   // Advance security deposit held at admission
   const depositHeld = selectedResident?.deposit_amount || 0
