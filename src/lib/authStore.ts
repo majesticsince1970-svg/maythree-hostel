@@ -62,26 +62,75 @@ export const DEFAULT_AUTH_USERS: StaffProfile[] = [
 export function getStoredAuthUsers(): StaffProfile[] {
   if (typeof localStorage === 'undefined') return DEFAULT_AUTH_USERS
   try {
+    let users: StaffProfile[] = []
     const raw = localStorage.getItem(AUTH_USERS_KEY)
-    if (!raw) {
-      // First time initialization
-      localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(DEFAULT_AUTH_USERS))
-      return DEFAULT_AUTH_USERS
+    if (raw) {
+      try {
+        users = JSON.parse(raw)
+      } catch {}
     }
-    const parsed: StaffProfile[] = JSON.parse(raw)
-    
-    // Ensure admin@maythree.com is always preserved
-    const hasMainAdmin = parsed.some(
-      u => u.email?.toLowerCase() === 'admin@maythree.com' || u.username === 'admin'
-    )
+
+    if (!Array.isArray(users) || users.length === 0) {
+      users = [...DEFAULT_AUTH_USERS]
+    }
+
+    // Always scan hostel state keys in localStorage to automatically pick up any user ever created in User Management / Settings
+    const stateKeys = [
+      'mythree_hostel_state_v9',
+      'mythree_hostel_state_v8',
+      'mythree_hostel_state_v7',
+      'mythree_hostel_state_v6',
+      'mythree_hostel_state'
+    ]
+
+    for (const key of stateKeys) {
+      const stateRaw = localStorage.getItem(key)
+      if (stateRaw) {
+        try {
+          const parsed = JSON.parse(stateRaw)
+          if (parsed && Array.isArray(parsed.staffList)) {
+            for (const staff of parsed.staffList) {
+              if (!staff || !staff.user_id) continue
+              const cleanEmail = staff.email ? staff.email.trim().toLowerCase() : ''
+              const cleanUsername = staff.username ? staff.username.trim().toLowerCase() : (cleanEmail ? cleanEmail.split('@')[0] : '')
+
+              const existingIdx = users.findIndex(u => 
+                u.user_id === staff.user_id || 
+                (cleanEmail && u.email?.toLowerCase() === cleanEmail) ||
+                (cleanUsername && u.username?.toLowerCase() === cleanUsername)
+              )
+
+              if (existingIdx >= 0) {
+                // Merge, preserving password if set
+                users[existingIdx] = {
+                  ...users[existingIdx],
+                  ...staff,
+                  username: cleanUsername || users[existingIdx].username,
+                  password: users[existingIdx].password || staff.password || 'admin123'
+                }
+              } else {
+                users.push({
+                  ...staff,
+                  username: cleanUsername || `user_${staff.user_id.slice(-4)}`,
+                  password: staff.password || 'admin123'
+                })
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // Ensure main admin is ALWAYS present
+    const hasMainAdmin = users.some(u => u.email?.toLowerCase() === 'admin@maythree.com' || u.username === 'admin')
     if (!hasMainAdmin) {
-      const merged = [DEFAULT_AUTH_USERS[0], ...parsed]
-      localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(merged))
-      return merged
+      users.unshift(DEFAULT_AUTH_USERS[0])
     }
-    return parsed
+
+    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users))
+    return users
   } catch (err) {
-    console.warn('[authStore] Error parsing stored auth users:', err)
+    console.warn('[authStore] Error loading stored auth users:', err)
     return DEFAULT_AUTH_USERS
   }
 }
@@ -110,13 +159,26 @@ export function findAuthUserByIdentifier(identifier: string): StaffProfile | nul
 
 export function upsertAuthUser(user: StaffProfile): void {
   const users = getStoredAuthUsers()
-  const idx = users.findIndex(u => u.user_id === user.user_id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()))
+  const cleanEmail = user.email ? user.email.trim().toLowerCase() : ''
+  const cleanUsername = user.username ? user.username.trim().toLowerCase() : (cleanEmail ? cleanEmail.split('@')[0] : '')
+
+  const idx = users.findIndex(u => 
+    u.user_id === user.user_id || 
+    (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail) ||
+    (cleanUsername && u.username && u.username.toLowerCase() === cleanUsername)
+  )
   
   if (idx >= 0) {
-    users[idx] = { ...users[idx], ...user, updated_at: new Date().toISOString() }
+    users[idx] = { 
+      ...users[idx], 
+      ...user, 
+      username: cleanUsername || users[idx].username,
+      updated_at: new Date().toISOString() 
+    }
   } else {
     users.push({
       ...user,
+      username: cleanUsername || `user_${user.user_id.slice(-4)}`,
       created_at: user.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
@@ -157,9 +219,11 @@ export function syncStaffListWithAuthStore(staffList: StaffProfile[]): StaffProf
       }
     } else {
       // User was created without being synced yet: add them to auth store with default password if missing
+      const cleanEmail = staff.email ? staff.email.trim().toLowerCase() : ''
+      const cleanUsername = staff.username ? staff.username.trim().toLowerCase() : (cleanEmail ? cleanEmail.split('@')[0] : `user_${staff.user_id.slice(-4)}`)
       const newUser: StaffProfile = {
         ...staff,
-        username: staff.username || (staff.email ? staff.email.split('@')[0] : `user_${staff.user_id.slice(-4)}`),
+        username: cleanUsername,
         password: staff.password || 'admin123',
         created_at: staff.created_at || new Date().toISOString()
       }
@@ -183,4 +247,3 @@ export function syncStaffListWithAuthStore(staffList: StaffProfile[]): StaffProf
 
   return syncedList
 }
-

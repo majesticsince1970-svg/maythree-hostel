@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
-import { LogIn, AlertCircle, Eye, EyeOff, ShieldAlert, Lock, Mail } from 'lucide-react'
+import { LogIn, AlertCircle, Eye, EyeOff, ShieldAlert, Lock, Mail, Key } from 'lucide-react'
+import { getStoredAuthUsers } from '@/lib/authStore'
+import type { StaffProfile } from '@/types/database'
 
-const MAX_ATTEMPTS = 5
+const MAX_ATTEMPTS = 15
 const LOCKOUT_DURATION_MS = 30000 // 30 seconds
 
 export function LoginPage() {
@@ -19,22 +21,11 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [availableAccounts, setAvailableAccounts] = useState<StaffProfile[]>([])
 
   // Rate limiting / Brute-force lockout state
-  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
-    const saved = sessionStorage.getItem('login_failed_attempts')
-    return saved ? parseInt(saved, 10) : 0
-  })
-
-  const [lockoutUntil, setLockoutUntil] = useState<number | null>(() => {
-    const saved = sessionStorage.getItem('login_lockout_until')
-    if (saved) {
-      const until = parseInt(saved, 10)
-      if (until > Date.now()) return until
-    }
-    return null
-  })
-
+  const [failedAttempts, setFailedAttempts] = useState<number>(0)
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null)
   const [remainingSeconds, setRemainingSeconds] = useState(0)
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -52,6 +43,10 @@ export function LoginPage() {
   // Clear existing lockout on initial component mount as requested
   useEffect(() => {
     resetLockout()
+    try {
+      const users = getStoredAuthUsers()
+      setAvailableAccounts(users)
+    } catch {}
   }, [])
 
   // Lockout countdown timer
@@ -159,9 +154,22 @@ export function LoginPage() {
 
             {/* Error Message */}
             {error && !isLockedOut && (
-              <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-xs font-medium border border-destructive/20">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
+              <div className="flex flex-col gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-xs font-medium border border-destructive/20">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 border-destructive/30 text-destructive hover:bg-destructive/15 shrink-0"
+                    onClick={resetLockout}
+                  >
+                    Reset Counter
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -242,6 +250,54 @@ export function LoginPage() {
               <LogIn className="h-4 w-4 mr-2" />
               {isLockedOut ? `Locked (${remainingSeconds}s)` : loading ? 'Authenticating...' : 'Sign In'}
             </Button>
+
+            {/* Quick-Fill / Registered Staff Accounts */}
+            {availableAccounts.length > 0 && (
+              <div className="pt-3 border-t border-border/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Key className="h-3.5 w-3.5 text-primary" />
+                    Available Staff Accounts
+                  </span>
+                  <span className="text-[10px] bg-primary/10 text-primary font-mono px-1.5 py-0.5 rounded">
+                    Universal Fallback: admin123
+                  </span>
+                </div>
+                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
+                  {availableAccounts.map((acc) => (
+                    <div
+                      key={acc.user_id}
+                      className="flex items-center justify-between p-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors text-xs"
+                    >
+                      <div className="truncate mr-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-foreground truncate">{acc.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-primary/10 text-primary capitalize">
+                            {acc.role?.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground font-mono truncate">
+                          {acc.email || acc.username}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 text-[11px] px-2.5 font-medium shrink-0 bg-primary/10 text-primary hover:bg-primary/20"
+                        onClick={() => {
+                          setEmail(acc.email || acc.username || '')
+                          setPassword(acc.password || 'admin123')
+                          setError('')
+                        }}
+                      >
+                        Auto-Fill ↵
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
 
           {/* Public Form Link */}
