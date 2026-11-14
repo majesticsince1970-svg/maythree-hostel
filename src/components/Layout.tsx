@@ -123,7 +123,7 @@ const navModules: NavModule[] = [
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { profile, signOut, switchRole } = useAuth()
+  const { profile, signOut } = useAuth()
   const { applications } = useDemoData()
   const location = useLocation()
   const navigate = useNavigate()
@@ -244,40 +244,25 @@ export function Layout() {
 
         {/* User profile & Sign Out */}
         <div className="p-3 border-t bg-card/60 backdrop-blur">
-          <div className="p-2.5 rounded-xl bg-muted/40 border mb-2 space-y-2">
+          <div className="p-2.5 rounded-xl bg-muted/40 border mb-2">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0 select-none">
                 {profile?.name?.charAt(0) || 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold truncate leading-none">{profile?.name}</p>
+                <p className="text-xs font-semibold truncate leading-none text-foreground select-none">{profile?.name || 'Staff'}</p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <Badge
                     variant={profile?.role === 'admin' ? 'default' : 'outline'}
-                    className="text-[9px] px-1.5 py-0 capitalize"
+                    className="text-[9px] px-1.5 py-0 capitalize select-none pointer-events-none"
                   >
-                    {profile?.role === 'admin' ? 'Admin' : profile?.role === 'staff' ? 'Staff' : 'Store'}
+                    {profile?.role === 'admin' ? 'Admin' : profile?.role === 'staff' ? 'Staff' : 'Store Staff'}
                   </Badge>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[10px] text-muted-foreground select-none">
                     {profile?.role === 'admin' ? 'Full Control' : 'Input Only'}
                   </span>
                 </div>
               </div>
-            </div>
-
-            {/* Quick Role Switcher for verifying RBAC */}
-            <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-1">
-              <span className="text-muted-foreground font-medium text-[10px]">Active Role:</span>
-              <select
-                value={profile?.role || 'admin'}
-                onChange={(e) => switchRole(e.target.value as any)}
-                className="bg-background border rounded px-1.5 py-0.5 text-[10px] font-semibold text-foreground cursor-pointer"
-                title="Switch role to test Admin (Edit/Delete) vs Staff (Input only) permissions"
-              >
-                <option value="admin">Admin (Full Edit/Delete)</option>
-                <option value="staff">Staff (Input Only)</option>
-                <option value="store_staff">Store Staff (Store Only)</option>
-              </select>
             </div>
           </div>
           <Button
@@ -287,7 +272,7 @@ export function Layout() {
             onClick={handleSignOut}
           >
             <LogOut className="h-3.5 w-3.5 mr-1.5" />
-            Sign Out
+            Logout
           </Button>
         </div>
       </aside>

@@ -16,7 +16,6 @@ interface AuthContextType {
   loading: boolean
   signIn: (identifier: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
-  switchRole: (role: 'admin' | 'staff' | 'store_staff') => void
   isAdmin: boolean
   isStaff: boolean
   isStoreStaff: boolean
@@ -166,18 +165,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const switchRole = (role: 'admin' | 'staff' | 'store_staff') => {
-    const users = getStoredAuthUsers()
-    const target = users.find(u => u.role === role) || DEFAULT_AUTH_USERS.find(u => u.role === role)
-    if (target) {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('mythree_active_user', JSON.stringify(target))
-      }
-      setProfile(target)
-      setUser({ id: target.user_id, email: target.email || `${target.username}@maythree.com` } as User)
-    }
-  }
-
   const value: AuthContextType = {
     user,
     session,
@@ -185,7 +172,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn,
     signOut,
-    switchRole,
     isAdmin: profile?.role === 'admin',
     isStaff: profile?.role === 'staff' || profile?.role === 'admin',
     isStoreStaff: profile?.role === 'store_staff' || profile?.role === 'admin',
