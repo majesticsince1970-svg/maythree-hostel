@@ -61,14 +61,17 @@ export function ApplicationsPage() {
   const [advanceAccountId, setAdvanceAccountId] = useState('ca-3') // Rent Cash default
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Auto-refresh listener for admin panel
+  // Auto-refresh listener for admin panel (immediate fetch on mount + 4s polling)
   useEffect(() => {
+    if (refreshApplications) {
+      refreshApplications()
+    }
     const interval = setInterval(() => {
       if (refreshApplications) {
         refreshApplications()
         setLastSyncTime(new Date())
       }
-    }, 10000)
+    }, 4000)
     return () => clearInterval(interval)
   }, [refreshApplications])
 

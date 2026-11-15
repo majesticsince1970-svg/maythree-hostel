@@ -43,7 +43,7 @@ export interface VacateResidentParams {
   processedBy?: string
 }
 
-const DEMO_MODE = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'your-supabase-url'
+const DEMO_MODE = false
 const STORAGE_KEY = 'mythree_hostel_state_v9'
 
 // ── Clean Hostel Data: 169 beds, 0 occupied, 169 vacant, 0 active residents, structure strictly preserved ──
@@ -375,12 +375,23 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           })
         }
 
-        if (remoteApps && remoteApps.length > 0) {
+        if (remoteApps) {
           const rApps = remoteApps as unknown as Application[]
           setApplications(prev => {
-            const existingIds = new Set(prev.map(a => a.id))
-            const newOnes = rApps.filter(a => !existingIds.has(a.id))
-            return [...newOnes, ...prev]
+            const map = new Map(rApps.map(a => [a.id, a]))
+            for (const localApp of prev) {
+              if (!map.has(localApp.id)) {
+                map.set(localApp.id, localApp)
+              } else {
+                const remote = map.get(localApp.id)!
+                map.set(localApp.id, {
+                  ...localApp,
+                  ...remote,
+                  documents: (remote.documents && remote.documents.length > 0) ? remote.documents : (localApp.documents || [])
+                })
+              }
+            }
+            return Array.from(map.values()).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
           })
         }
 
