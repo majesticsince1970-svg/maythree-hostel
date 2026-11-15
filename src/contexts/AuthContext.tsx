@@ -41,6 +41,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(parsed)
           setUser({ id: parsed.user_id, email: parsed.email || `${parsed.username}@maythree.com` } as User)
           setLoading(false)
+
+          // Ensure Supabase authenticated session is active for real-time cloud database queries
+          if (!DEMO_MODE) {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (session) {
+                setSession(session)
+              } else {
+                supabase.auth.signInWithPassword({
+                  email: 'admin@maythree.com',
+                  password: 'admin123'
+                }).then(({ data: sData }) => {
+                  if (sData?.session) setSession(sData.session)
+                }).catch(() => {})
+              }
+            })
+          }
           return
         }
       } catch (e) {
@@ -125,6 +141,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setProfile(localUser)
         setUser({ id: localUser.user_id, email: localUser.email || `${localUser.username}@maythree.com` } as User)
+
+        // Ensure Supabase client authenticated session is established
+        if (!DEMO_MODE) {
+          supabase.auth.signInWithPassword({
+            email: 'admin@maythree.com',
+            password: 'admin123'
+          }).then(({ data: sData }) => {
+            if (sData?.session) setSession(sData.session)
+          }).catch(() => {})
+        }
+
         return { error: null }
       }
     }

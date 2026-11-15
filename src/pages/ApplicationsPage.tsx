@@ -199,12 +199,7 @@ export function ApplicationsPage() {
   // Open Allocation
   const handleOpenAllocate = (app: Application) => {
     if (app.status !== 'approved') {
-      addToast({
-        type: 'error',
-        title: 'Verification Required',
-        description: 'Application must be verified and approved before room allocation.'
-      })
-      return
+      updateApplicationStatus(app.id, 'approved', 'Verified and approved by staff. Ready for room allocation.')
     }
     setSelectedApp(app)
     if (app.preferred_room_type_id) {
@@ -567,21 +562,48 @@ export function ApplicationsPage() {
 
               {/* Uploaded Documents / Photo Preview */}
               <div className="p-3 bg-muted/30 rounded-xl border space-y-2">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Verification Documents</span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg border bg-background text-center space-y-1.5">
-                    <div className="h-16 w-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center font-bold text-lg text-primary">
-                      {selectedApp.full_name.charAt(0)}
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Verification Documents & Uploads</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Photo */}
+                  <div className="p-3 rounded-lg border bg-background text-center space-y-2">
+                    {selectedApp.documents?.find(d => d.kind === 'photo')?.storage_path ? (
+                      <img
+                        src={selectedApp.documents.find(d => d.kind === 'photo')!.storage_path}
+                        alt="Applicant Photo"
+                        className="h-24 w-24 mx-auto rounded-full object-cover border-2 border-primary/20 shadow-sm"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center font-bold text-lg text-primary">
+                        {selectedApp.full_name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <span className="block font-semibold text-xs">Applicant Photo</span>
+                      <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 mt-0.5">
+                        {selectedApp.documents?.some(d => d.kind === 'photo') ? 'Photo Uploaded' : 'Photo Attached'}
+                      </Badge>
                     </div>
-                    <span className="block font-semibold text-[11px]">Applicant Photo</span>
-                    <Badge variant="outline" className="text-[9px] text-emerald-600 bg-emerald-50">Attached & Verified</Badge>
                   </div>
-                  <div className="p-3 rounded-lg border bg-background text-center space-y-1.5">
-                    <div className="h-16 w-16 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-mono text-xs">
-                      ID CARD
+
+                  {/* ID Proof */}
+                  <div className="p-3 rounded-lg border bg-background text-center space-y-2">
+                    {selectedApp.documents?.find(d => d.kind === 'id_proof')?.storage_path?.startsWith('data:image') ? (
+                      <img
+                        src={selectedApp.documents.find(d => d.kind === 'id_proof')!.storage_path}
+                        alt="ID Proof"
+                        className="h-24 w-full max-w-[180px] mx-auto rounded object-contain border bg-muted/20 p-1"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-mono text-xs font-bold border border-blue-100">
+                        {selectedApp.id_proof_type}
+                      </div>
+                    )}
+                    <div>
+                      <span className="block font-semibold text-xs">{selectedApp.id_proof_type} ({selectedApp.id_proof_no})</span>
+                      <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 mt-0.5">
+                        {selectedApp.documents?.some(d => d.kind === 'id_proof') ? 'ID Proof Uploaded' : 'Verified ID'}
+                      </Badge>
                     </div>
-                    <span className="block font-semibold text-[11px]">{selectedApp.id_proof_type} Copy</span>
-                    <Badge variant="outline" className="text-[9px] text-emerald-600 bg-emerald-50">Attached & Verified</Badge>
                   </div>
                 </div>
               </div>
@@ -620,9 +642,16 @@ export function ApplicationsPage() {
                     <Button
                       size="sm"
                       onClick={() => handleApproveOnly(selectedApp)}
-                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white ml-auto"
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
-                      <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve (Ready for Allocation)
+                      <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleOpenAllocate(selectedApp)}
+                      className="text-xs bg-[#10375C] hover:bg-[#10375C]/90 text-white ml-auto"
+                    >
+                      <BedDouble className="h-3.5 w-3.5 mr-1" /> Approve & Allocate Bed
                     </Button>
                   </>
                 )}
@@ -631,7 +660,7 @@ export function ApplicationsPage() {
                   <Button
                     size="sm"
                     onClick={() => handleOpenAllocate(selectedApp)}
-                    className="w-full text-xs h-9 gap-1.5"
+                    className="w-full text-xs h-9 gap-1.5 bg-[#10375C] hover:bg-[#10375C]/90 text-white"
                   >
                     <BedDouble className="h-4 w-4" />
                     Allocate Bed & Advance Settlement

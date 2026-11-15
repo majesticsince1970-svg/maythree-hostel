@@ -12,7 +12,29 @@ import { formatCurrency } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2 } from 'lucide-react'
+import imageCompression from 'browser-image-compression'
+
+async function fileToDataUri(file: File): Promise<string> {
+  let fileToRead = file
+  if (file.type.startsWith('image/')) {
+    try {
+      fileToRead = await imageCompression(file, {
+        maxSizeMB: 0.15,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+      })
+    } catch {
+      fileToRead = file
+    }
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(fileToRead)
+  })
+}
 
 const personalSchema = z.object({
   full_name: z.string().min(2, 'Name is required'),
@@ -88,6 +110,21 @@ export function ApplyPage() {
     if (!personalData || !addressData || !emergencyData || !agreed) return
     setSubmitting(true)
     try {
+      const docPayloads: Array<{ kind: 'photo' | 'id_proof' | 'certificate' | 'other'; storage_path: string; verified: boolean }> = []
+
+      if (documents.photo) {
+        const photoUri = await fileToDataUri(documents.photo)
+        docPayloads.push({ kind: 'photo', storage_path: photoUri, verified: false })
+      }
+      if (documents.id_proof) {
+        const idUri = await fileToDataUri(documents.id_proof)
+        docPayloads.push({ kind: 'id_proof', storage_path: idUri, verified: false })
+      }
+      if (documents.certificate) {
+        const certUri = await fileToDataUri(documents.certificate)
+        docPayloads.push({ kind: 'certificate', storage_path: certUri, verified: false })
+      }
+
       const app = await addApplication({
         full_name: personalData.full_name,
         dob: personalData.dob,
@@ -103,7 +140,7 @@ export function ApplyPage() {
         emergency_phone: emergencyData.emergency_phone,
         preferred_room_type_id: personalData.preferred_room_type_id,
         preferred_ac: personalData.preferred_ac,
-        documents: [],
+        documents: docPayloads as any,
         preferred_room_type: roomTypes.find(rt => rt.id === personalData.preferred_room_type_id),
       })
       navigate('/apply/done', {
@@ -111,7 +148,7 @@ export function ApplyPage() {
           refNo: app.ref_no,
           name: personalData.full_name,
           phone: personalData.phone,
-          status: 'pending_approval'
+          status: 'submitted'
         }
       })
     } catch (err) {

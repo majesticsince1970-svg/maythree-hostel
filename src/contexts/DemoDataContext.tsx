@@ -339,14 +339,26 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           { data: remoteProducts },
           { data: remoteVacated },
           { data: remoteReceipts },
+          { data: remoteRooms },
+          { data: remoteBeds },
         ] = await Promise.all([
-          supabase.from('applications').select('*'),
+          supabase.from('applications').select('*, documents(*)').order('submitted_at', { ascending: false }),
           supabase.from('residents').select('*, application:applications(*), bed:beds(*, room:rooms(*))'),
           supabase.from('payments').select('*'),
           supabase.from('products').select('*'),
           supabase.from('vacated_residents').select('*'),
           supabase.from('checkout_receipts').select('*'),
+          supabase.from('rooms').select('*'),
+          supabase.from('beds').select('*'),
         ])
+
+        if (remoteRooms && remoteRooms.length > 0) {
+          setRooms(remoteRooms as Room[])
+        }
+
+        if (remoteBeds && remoteBeds.length > 0) {
+          setBeds(remoteBeds as Bed[])
+        }
 
         if (remoteProducts && remoteProducts.length > 0) {
           const rps = remoteProducts as unknown as Product[]
@@ -432,6 +444,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
               if (prev.some(a => a.id === newApp.id || a.ref_no === newApp.ref_no)) return prev
               return [newApp, ...prev]
             })
+            // Fetch complete record with uploaded documents in background
+            refreshApplications()
           } else if (payload.eventType === 'UPDATE') {
             const updatedApp = payload.new as Application
             setApplications(prev => prev.map(a => a.id === updatedApp.id ? { ...a, ...updatedApp } : a))
@@ -585,16 +599,37 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Application actions ──
   const addApplication = useCallback(async (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>): Promise<Application> => {
-    const timestamp = Date.now()
-    const refNo = `HST-2026-${String(applications.length + 1).padStart(4, '0')}`
+    const appUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+      ? crypto.randomUUID() 
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        })
+    const refNo = `HST-2026-${String(Math.floor(1000 + Math.random() * 9000))}`
+
+    // Map room type ID to Supabase UUID if needed
+    let supaRoomTypeId: string | null = null
+    if (app.preferred_room_type_id) {
+      if (app.preferred_room_type_id === 'rt-1' || app.preferred_room_type_id.includes('twin')) {
+        supaRoomTypeId = '11111111-1111-1111-1111-111111111111'
+      } else if (app.preferred_room_type_id === 'rt-2' || app.preferred_room_type_id.includes('single')) {
+        supaRoomTypeId = '22222222-2222-2222-2222-222222222222'
+      } else if (app.preferred_room_type_id === 'rt-3' || app.preferred_room_type_id.includes('4')) {
+        supaRoomTypeId = '33333333-3333-3333-3333-333333333333'
+      } else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(app.preferred_room_type_id)) {
+        supaRoomTypeId = app.preferred_room_type_id
+      }
+    }
+
     const newApp: Application = {
       ...app,
-      id: `app-${timestamp}`,
+      id: appUuid,
       ref_no: refNo,
       submitted_at: new Date().toISOString(),
-      status: 'pending_approval',
+      status: 'submitted',
       reviewed_by: null,
       review_note: null,
+      documents: app.documents || []
     }
     setApplications(prev => [newApp, ...prev])
 
@@ -606,7 +641,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           full_name: newApp.full_name,
           dob: newApp.dob,
           phone: newApp.phone,
-          email: newApp.email,
+          email: newApp.email || null,
           permanent_address: newApp.permanent_address,
           occupation: newApp.occupation,
           institution_or_employer: newApp.institution_or_employer,
@@ -615,15 +650,34 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           emergency_name: newApp.emergency_name,
           emergency_relation: newApp.emergency_relation,
           emergency_phone: newApp.emergency_phone,
-          preferred_room_type_id: newApp.preferred_room_type_id,
-          preferred_ac: newApp.preferred_ac,
-          status: 'pending_approval',
+          preferred_room_type_id: supaRoomTypeId,
+          preferred_ac: newApp.preferred_ac || 'any',
+          status: 'submitted',
           submitted_at: newApp.submitted_at
         }])
         if (error) {
           console.error('[PublicAdmission] Supabase submission error:', error)
         } else {
-          console.log('[PublicAdmission] Application recorded with pending_approval status:', newApp.ref_no)
+          console.log('[PublicAdmission] Application recorded in Supabase cloud database:', newApp.ref_no)
+        }
+
+        // Insert uploaded documents (photo, id_proof, certificate)
+        if (newApp.documents && newApp.documents.length > 0) {
+          for (const doc of newApp.documents) {
+            const docUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+              ? crypto.randomUUID() 
+              : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                  const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                  return v.toString(16);
+                })
+            await (supabase as any).from('documents').insert([{
+              id: docUuid,
+              application_id: newApp.id,
+              kind: doc.kind,
+              storage_path: doc.storage_path,
+              verified: false
+            }]).catch((de: any) => console.warn('[PublicAdmission] Document insert warn:', de))
+          }
         }
       } catch (err) {
         console.error('[PublicAdmission] Network/database exception during submission:', err)
@@ -631,19 +685,26 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
 
     return newApp
-  }, [applications.length])
+  }, [])
 
   const refreshApplications = useCallback(async () => {
     if (DEMO_MODE) return
     try {
       const { data, error } = await supabase
         .from('applications')
-        .select('*')
+        .select('*, documents(*)')
         .order('submitted_at', { ascending: false })
       if (!error && data) {
         setApplications(prev => {
           const map = new Map(prev.map(a => [a.id, a]))
-          data.forEach((app: any) => map.set(app.id, { ...map.get(app.id), ...app }))
+          data.forEach((app: any) => {
+            const existing = map.get(app.id)
+            map.set(app.id, {
+              ...existing,
+              ...app,
+              documents: (app.documents && app.documents.length > 0) ? app.documents : (existing?.documents || [])
+            })
+          })
           return Array.from(map.values()).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
         })
       } else if (error) {
@@ -711,8 +772,15 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const rentToCharge = monthlyRent || rt?.rent_per_head || 8000
 
     // Create resident
+    const residentUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+      ? crypto.randomUUID() 
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        })
+
     const newResident: Resident = {
-      id: `res-${Date.now()}`,
+      id: residentUuid,
       application_id: applicationId,
       bed_id: bedId,
       check_in_date: checkInDate,
@@ -779,8 +847,18 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     if (!DEMO_MODE) {
       ;(supabase as any).from('beds').update({ status: 'occupied' }).eq('id', bedId).then().catch(() => {})
       const { application: _app, bed: _bed, ...dbResident } = newResident
-      ;(supabase as any).from('residents').insert([dbResident]).then().catch((e: any) => console.warn('[Supabase] resident insert:', e?.message))
-      ;(supabase as any).from('applications').update({ status: 'approved' }).eq('id', applicationId).then().catch(() => {})
+      ;(supabase as any).from('residents').insert([{
+        id: dbResident.id,
+        application_id: dbResident.application_id,
+        bed_id: dbResident.bed_id,
+        check_in_date: dbResident.check_in_date,
+        monthly_rent: dbResident.monthly_rent,
+        deposit_amount: dbResident.deposit_amount,
+        status: dbResident.status,
+        pin: dbResident.pin,
+        pin_active: dbResident.pin_active
+      }]).then().catch((e: any) => console.warn('[Supabase] resident insert:', e?.message))
+      ;(supabase as any).from('applications').update({ status: 'approved', review_note: 'Approved and bed allocated' }).eq('id', applicationId).then().catch(() => {})
     }
   }, [applications, beds, rooms, roomTypes, residents, cashAccounts])
 
