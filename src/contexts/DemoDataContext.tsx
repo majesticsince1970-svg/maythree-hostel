@@ -398,9 +398,13 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         if (remoteResidents && remoteResidents.length > 0) {
           const rRes = remoteResidents as unknown as Resident[]
           setResidents(prev => {
-            const existingIds = new Set(prev.map(r => r.id))
-            const newOnes = rRes.filter(r => !existingIds.has(r.id))
-            return [...prev, ...newOnes]
+            const map = new Map(rRes.map(r => [r.id, r]))
+            for (const localRes of prev) {
+              if (!map.has(localRes.id)) {
+                map.set(localRes.id, localRes)
+              }
+            }
+            return Array.from(map.values())
           })
         }
 
@@ -552,9 +556,22 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const currentMonth = new Date().toISOString().slice(0, 7)
     const totalPaid = payments.filter(p => p.period_month === currentMonth).reduce((s, p) => s + p.amount, 0)
 
-    const twinVacant = beds.filter(b => b.status === 'available' && b.room_id.startsWith('room-2')).length
-    const singleVacant = beds.filter(b => b.status === 'available' && b.room_id.startsWith('room-3')).length
-    const fourVacant = beds.filter(b => b.status === 'available' && !b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3')).length
+    const roomMap = new Map(rooms.map(r => [r.id, r]))
+    const twinVacant = beds.filter(b => {
+      if (b.status !== 'available') return false
+      const rm = roomMap.get(b.room_id)
+      return rm ? (rm.floor === 2 || rm.room_no.startsWith('2')) : b.room_id.startsWith('room-2')
+    }).length
+    const singleVacant = beds.filter(b => {
+      if (b.status !== 'available') return false
+      const rm = roomMap.get(b.room_id)
+      return rm ? (rm.floor === 3 || rm.room_no.startsWith('3')) : b.room_id.startsWith('room-3')
+    }).length
+    const fourVacant = beds.filter(b => {
+      if (b.status !== 'available') return false
+      const rm = roomMap.get(b.room_id)
+      return rm ? (rm.floor !== 2 && rm.floor !== 3 && !rm.room_no.startsWith('2') && !rm.room_no.startsWith('3')) : (!b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3'))
+    }).length
 
     return {
       total_beds: beds.length,
@@ -574,15 +591,43 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         { category: '4-Sharing', count: fourVacant },
       ]
     }
-  }, [beds, applications, residents, payments, attendanceStats])
+  }, [beds, rooms, applications, residents, payments, attendanceStats])
 
   const publicRoomOptions = useMemo<PublicRoomOption[]>(() => {
+    const roomMap = new Map(rooms.map(r => [r.id, r]))
     return [
-      { room_type: 'Twin Sharing · Non-AC', has_ac: false, rent_per_head: roomTypes[0]?.rent_per_head || 8000, beds_available: beds.filter(b => b.status === 'available' && b.room_id.startsWith('room-2')).length },
-      { room_type: 'Single Room · Non-AC', has_ac: false, rent_per_head: roomTypes[1]?.rent_per_head || 10000, beds_available: beds.filter(b => b.status === 'available' && b.room_id.startsWith('room-3')).length },
-      { room_type: '4-Sharing · Non-AC', has_ac: false, rent_per_head: roomTypes[2]?.rent_per_head || 7000, beds_available: beds.filter(b => b.status === 'available' && !b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3')).length },
+      {
+        room_type: 'Twin Sharing · Non-AC',
+        has_ac: false,
+        rent_per_head: roomTypes[0]?.rent_per_head || 8000,
+        beds_available: beds.filter(b => {
+          if (b.status !== 'available') return false
+          const rm = roomMap.get(b.room_id)
+          return rm ? (rm.floor === 2 || rm.room_no.startsWith('2')) : b.room_id.startsWith('room-2')
+        }).length
+      },
+      {
+        room_type: 'Single Room · Non-AC',
+        has_ac: false,
+        rent_per_head: roomTypes[1]?.rent_per_head || 10000,
+        beds_available: beds.filter(b => {
+          if (b.status !== 'available') return false
+          const rm = roomMap.get(b.room_id)
+          return rm ? (rm.floor === 3 || rm.room_no.startsWith('3')) : b.room_id.startsWith('room-3')
+        }).length
+      },
+      {
+        room_type: '4-Sharing · Non-AC',
+        has_ac: false,
+        rent_per_head: roomTypes[2]?.rent_per_head || 7000,
+        beds_available: beds.filter(b => {
+          if (b.status !== 'available') return false
+          const rm = roomMap.get(b.room_id)
+          return rm ? (rm.floor !== 2 && rm.floor !== 3 && !rm.room_no.startsWith('2') && !rm.room_no.startsWith('3')) : (!b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3'))
+        }).length
+      },
     ].filter(o => o.beds_available > 0)
-  }, [beds, roomTypes])
+  }, [beds, rooms, roomTypes])
 
   const rentDueList = useMemo<RentDueView[]>(() => {
     const currentMonth = new Date().toISOString().slice(0, 7)
