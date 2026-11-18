@@ -1,4 +1,5 @@
 import type { StaffProfile, StaffRole } from '@/types/database'
+import { supabase } from '@/lib/supabase'
 
 const AUTH_USERS_KEY = 'mythree_auth_users_v2'
 
@@ -11,6 +12,15 @@ export const DEFAULT_AUTH_USERS: StaffProfile[] = [
     username: 'admin',
     password: 'admin123',
     created_at: '2026-10-31T14:30:59Z'
+  },
+  {
+    user_id: 'staff-1794661590764',
+    name: 'Hadi',
+    role: 'admin',
+    email: 'hadimajestic@gmail.com',
+    username: 'hadi',
+    password: 'admin123',
+    created_at: '2026-11-14T13:21:33Z'
   },
   {
     user_id: 'demo-admin-1',
@@ -59,8 +69,18 @@ export const DEFAULT_AUTH_USERS: StaffProfile[] = [
   }
 ]
 
+let inMemoryUsers: StaffProfile[] | null = null
+
 export function getStoredAuthUsers(): StaffProfile[] {
-  if (typeof localStorage === 'undefined') return DEFAULT_AUTH_USERS
+  if (inMemoryUsers && inMemoryUsers.length > 0) {
+    return inMemoryUsers
+  }
+
+  if (typeof localStorage === 'undefined') {
+    inMemoryUsers = [...DEFAULT_AUTH_USERS]
+    return inMemoryUsers
+  }
+
   try {
     let users: StaffProfile[] = []
     const raw = localStorage.getItem(AUTH_USERS_KEY)
@@ -101,7 +121,6 @@ export function getStoredAuthUsers(): StaffProfile[] {
               )
 
               if (existingIdx >= 0) {
-                // Merge, preserving password if set
                 users[existingIdx] = {
                   ...users[existingIdx],
                   ...staff,
@@ -121,21 +140,30 @@ export function getStoredAuthUsers(): StaffProfile[] {
       }
     }
 
-    // Ensure main admin is ALWAYS present
-    const hasMainAdmin = users.some(u => u.email?.toLowerCase() === 'admin@maythree.com' || u.username === 'admin')
-    if (!hasMainAdmin) {
-      users.unshift(DEFAULT_AUTH_USERS[0])
+    // Ensure built-in accounts are ALWAYS present
+    for (const def of DEFAULT_AUTH_USERS) {
+      const hasDef = users.some(u => 
+        (u.email && def.email && u.email.toLowerCase() === def.email.toLowerCase()) ||
+        (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase()) ||
+        u.user_id === def.user_id
+      )
+      if (!hasDef) {
+        users.push(def)
+      }
     }
 
+    inMemoryUsers = users
     localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users))
     return users
   } catch (err) {
     console.warn('[authStore] Error loading stored auth users:', err)
-    return DEFAULT_AUTH_USERS
+    inMemoryUsers = [...DEFAULT_AUTH_USERS]
+    return inMemoryUsers
   }
 }
 
 export function saveAuthUsers(users: StaffProfile[]): void {
+  inMemoryUsers = users
   if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users))
@@ -144,26 +172,163 @@ export function saveAuthUsers(users: StaffProfile[]): void {
   }
 }
 
+/**
+ * Case-insensitive, robust credential lookup supporting:
+ * - username (e.g. "hadi", "Hadi", "HADI")
+ * - full email (e.g. "hadimajestic@gmail.com", "admin@maythree.com")
+ * - email prefix (e.g. "hadimajestic", "admin")
+ * - full name (e.g. "Hadi", "System Admin")
+ */
 export function findAuthUserByIdentifier(identifier: string): StaffProfile | null {
   const clean = identifier.trim().toLowerCase()
   if (!clean) return null
   const users = getStoredAuthUsers()
 
   return users.find(u => {
-    const emailMatch = u.email && u.email.trim().toLowerCase() === clean
-    const usernameMatch = u.username && u.username.trim().toLowerCase() === clean
-    const prefixMatch = u.email && u.email.trim().toLowerCase().split('@')[0] === clean
-    return emailMatch || usernameMatch || prefixMatch
+    const uUser = (u.username || '').trim().toLowerCase()
+    const uEmail = (u.email || '').trim().toLowerCase()
+    const uPrefix = uEmail.split('@')[0]
+    const uName = (u.name || '').trim().toLowerCase()
+
+    return uUser === clean || uEmail === clean || uPrefix === clean || uName === clean
   }) || null
 }
 
+/**
+ * Live Supabase query for cross-device authentication:
+ * If a user doesn't exist in local browser cache, queries the shared Supabase cloud database.
+ */
+export async function findAuthUserAsync(identifier: string): Promise<StaffProfile | null> {
+  const localMatch = findAuthUserByIdentifier(identifier)
+  if (localMatch) return localMatch
+
+  // Fresh sync from cloud
+  const freshUsers = await syncAuthUsersFromSupabase()
+  const clean = identifier.trim().toLowerCase()
+
+  return freshUsers.find(u => {
+    const uUser = (u.username || '').trim().toLowerCase()
+    const uEmail = (u.email || '').trim().toLowerCase()
+    const uPrefix = uEmail.split('@')[0]
+    const uName = (u.name || '').trim().toLowerCase()
+
+    return uUser === clean || uEmail === clean || uPrefix === clean || uName === clean
+  }) || null
+}
+
+/**
+ * Synchronizes user accounts from live Supabase cloud database
+ * Reads from both `app_users` table and `audit_log` (with table_name='app_users').
+ */
+export async function syncAuthUsersFromSupabase(): Promise<StaffProfile[]> {
+  try {
+    const currentUsers = getStoredAuthUsers()
+    const userMap = new Map<string, StaffProfile>()
+
+    // Seed defaults into map
+    for (const u of currentUsers) {
+      userMap.set(u.user_id, u)
+      if (u.username) userMap.set(u.username.toLowerCase(), u)
+      if (u.email) userMap.set(u.email.toLowerCase(), u)
+    }
+
+    // 1. Fetch from app_users table if available
+    try {
+      const { data: remoteAppUsers } = await (supabase as any).from('app_users').select('*')
+      if (remoteAppUsers && remoteAppUsers.length > 0) {
+        for (const ru of remoteAppUsers) {
+          const profile: StaffProfile = {
+            user_id: ru.user_id,
+            name: ru.name,
+            role: ru.role as StaffRole,
+            email: ru.email || undefined,
+            username: ru.username,
+            password: ru.password,
+            created_at: ru.created_at || undefined,
+            updated_at: ru.updated_at || undefined
+          }
+          userMap.set(profile.user_id, profile)
+          if (profile.username) userMap.set(profile.username.toLowerCase(), profile)
+          if (profile.email) userMap.set(profile.email.toLowerCase(), profile)
+        }
+      }
+    } catch {}
+
+    // 2. Fetch from audit_log table (persistent cloud sync table)
+    try {
+      const { data: auditRows } = await (supabase as any)
+        .from('audit_log')
+        .select('*')
+        .eq('table_name', 'app_users')
+        .order('performed_at', { ascending: true })
+
+      if (auditRows && auditRows.length > 0) {
+        for (const row of auditRows) {
+          if (row.action === 'USER_DELETE' && row.record_id) {
+            userMap.delete(row.record_id)
+            continue
+          }
+
+          const rawUser = row.new_values as StaffProfile | undefined
+          if (rawUser && rawUser.user_id) {
+            const profile: StaffProfile = {
+              user_id: rawUser.user_id,
+              name: rawUser.name,
+              role: (rawUser.role as StaffRole) || 'staff',
+              email: rawUser.email || undefined,
+              username: rawUser.username || (rawUser.email ? rawUser.email.split('@')[0] : `user_${rawUser.user_id.slice(-4)}`),
+              password: rawUser.password || 'admin123',
+              created_at: rawUser.created_at || row.performed_at,
+              updated_at: rawUser.updated_at || row.performed_at
+            }
+            userMap.set(profile.user_id, profile)
+            if (profile.username) userMap.set(profile.username.toLowerCase(), profile)
+            if (profile.email) userMap.set(profile.email.toLowerCase(), profile)
+          }
+        }
+      }
+    } catch {}
+
+    // Deduplicate unique profiles by user_id
+    const dedupedMap = new Map<string, StaffProfile>()
+    for (const val of userMap.values()) {
+      dedupedMap.set(val.user_id, val)
+    }
+
+    // Ensure built-in accounts are ALWAYS present
+    for (const def of DEFAULT_AUTH_USERS) {
+      if (!dedupedMap.has(def.user_id)) {
+        dedupedMap.set(def.user_id, def)
+      }
+    }
+
+    const merged = Array.from(dedupedMap.values())
+    saveAuthUsers(merged)
+    return merged
+  } catch (err) {
+    console.warn('[authStore] Error syncing users from Supabase:', err)
+    return getStoredAuthUsers()
+  }
+}
+
+/**
+ * Persists a user to local cache AND live Supabase cloud database
+ */
 export function upsertAuthUser(user: StaffProfile): void {
   const users = getStoredAuthUsers()
   const cleanEmail = user.email ? user.email.trim().toLowerCase() : ''
   const cleanUsername = user.username ? user.username.trim().toLowerCase() : (cleanEmail ? cleanEmail.split('@')[0] : '')
 
+  const sanitizedUser: StaffProfile = {
+    ...user,
+    email: cleanEmail || undefined,
+    username: cleanUsername || `user_${user.user_id.slice(-4)}`,
+    password: user.password || 'admin123',
+    updated_at: new Date().toISOString()
+  }
+
   const idx = users.findIndex(u => 
-    u.user_id === user.user_id || 
+    u.user_id === sanitizedUser.user_id || 
     (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail) ||
     (cleanUsername && u.username && u.username.toLowerCase() === cleanUsername)
   )
@@ -171,26 +336,66 @@ export function upsertAuthUser(user: StaffProfile): void {
   if (idx >= 0) {
     users[idx] = { 
       ...users[idx], 
-      ...user, 
-      username: cleanUsername || users[idx].username,
-      updated_at: new Date().toISOString() 
+      ...sanitizedUser
     }
   } else {
     users.push({
-      ...user,
-      username: cleanUsername || `user_${user.user_id.slice(-4)}`,
-      created_at: user.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      ...sanitizedUser,
+      created_at: sanitizedUser.created_at || new Date().toISOString()
     })
   }
+
   saveAuthUsers(users)
+
+  // Asynchronously save to Supabase cloud database
+  Promise.resolve().then(async () => {
+    try {
+      // 1. Write to audit_log for universal cloud replication
+      await (supabase as any).from('audit_log').insert({
+        action: 'USER_SYNC',
+        table_name: 'app_users',
+        new_values: sanitizedUser
+      })
+
+      // 2. Also try writing directly to app_users table
+      await (supabase as any).from('app_users').upsert({
+        user_id: sanitizedUser.user_id,
+        name: sanitizedUser.name,
+        role: sanitizedUser.role,
+        email: sanitizedUser.email || null,
+        username: sanitizedUser.username || sanitizedUser.user_id,
+        password: sanitizedUser.password || 'admin123',
+        updated_at: new Date().toISOString()
+      }).select()
+    } catch (err) {
+      console.warn('[authStore] Background cloud user sync notice:', err)
+    }
+  })
 }
 
+/**
+ * Removes a user from local cache AND live Supabase cloud database
+ */
 export function deleteAuthUser(userId: string): void {
   const users = getStoredAuthUsers()
   // Never delete main admin
   const filtered = users.filter(u => u.user_id !== userId || u.email === 'admin@maythree.com')
   saveAuthUsers(filtered)
+
+  // Asynchronously propagate deletion to Supabase cloud
+  Promise.resolve().then(async () => {
+    try {
+      await (supabase as any).from('audit_log').insert({
+        action: 'USER_DELETE',
+        table_name: 'app_users',
+        record_id: userId
+      })
+
+      await (supabase as any).from('app_users').delete().eq('user_id', userId)
+    } catch (err) {
+      console.warn('[authStore] Background cloud user delete notice:', err)
+    }
+  })
 }
 
 export function syncStaffListWithAuthStore(staffList: StaffProfile[]): StaffProfile[] {

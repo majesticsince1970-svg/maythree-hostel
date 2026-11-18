@@ -20,7 +20,8 @@ import {
 import {
   upsertAuthUser,
   deleteAuthUser,
-  syncStaffListWithAuthStore
+  syncStaffListWithAuthStore,
+  syncAuthUsersFromSupabase
 } from '@/lib/authStore'
 import type { AttendanceMovement } from '@/types/database'
 
@@ -433,6 +434,12 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
             const newOnes = rRec.filter(r => !existingIds.has(r.id))
             return [...newOnes, ...prev]
           })
+        }
+
+        // Hydrate staff user accounts from shared Supabase database
+        const syncedStaff = await syncAuthUsersFromSupabase()
+        if (syncedStaff && syncedStaff.length > 0) {
+          setStaffList(syncedStaff)
         }
       } catch (e) {
         console.warn('Supabase background load warning (using local state):', e)

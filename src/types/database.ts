@@ -459,16 +459,42 @@ export interface DashboardStats {
   }[]
 }
 
+export interface AppUser {
+  id?: string
+  user_id: string
+  name: string
+  role: StaffRole
+  email?: string
+  username: string
+  password: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AuditLogEntry {
+  id?: string
+  action: string
+  table_name: string
+  record_id?: string | null
+  old_values?: any
+  new_values?: any
+  performed_by?: string | null
+  performed_at?: string
+}
+
 type TableDef<T> = {
   Row: T
   Insert: Partial<T>
   Update: Partial<T>
+  Relationships: any[]
 }
 
 // Supabase Database type (simplified for client usage)
 export interface Database {
   public: {
     Tables: {
+      app_users: TableDef<AppUser>
+      audit_log: TableDef<AuditLogEntry>
       room_types: TableDef<RoomType>
       flats: TableDef<Flat>
       rooms: TableDef<Room>

@@ -180,6 +180,9 @@ export function LoginPage() {
                 placeholder="admin@maythree.com or username"
                 className="mt-1 text-xs h-9"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 disabled={loading || isLockedOut}
                 required
               />

@@ -4,6 +4,8 @@ import type { StaffProfile } from '@/types/database'
 import type { User, Session } from '@supabase/supabase-js'
 import {
   findAuthUserByIdentifier,
+  findAuthUserAsync,
+  syncAuthUsersFromSupabase,
   getStoredAuthUsers,
   upsertAuthUser,
   DEFAULT_AUTH_USERS
@@ -32,6 +34,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Background sync of user credentials from shared Supabase database
+    syncAuthUsersFromSupabase().catch(() => {})
+
     // 1. Check for active local authenticated session
     const savedActiveUser = typeof localStorage !== 'undefined' ? localStorage.getItem('mythree_active_user') : null
     if (savedActiveUser) {
@@ -118,29 +123,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanId = identifier.trim().toLowerCase()
     const cleanPwd = password.trim()
 
-    // 1. Check unified staff credential store (covers all users created in Settings + default admin)
-    const localUser = findAuthUserByIdentifier(cleanId)
-    if (localUser) {
+    // 1. Check unified staff credential store (cached + live Supabase sync)
+    let targetUser = findAuthUserByIdentifier(cleanId)
+    if (!targetUser) {
+      targetUser = await findAuthUserAsync(cleanId)
+    }
+
+    if (targetUser) {
       // Flexible password check:
       // A) Match stored password
       // B) Universal master fallback 'admin123'
       // C) If user had NO password stored (from previous version), adopt the entered password!
       const isMatch = 
-        !localUser.password || 
-        localUser.password === cleanPwd || 
-        localUser.password === password ||
+        !targetUser.password || 
+        targetUser.password === cleanPwd || 
+        targetUser.password === password ||
         cleanPwd === 'admin123'
 
       if (isMatch) {
-        if (!localUser.password) {
-          localUser.password = cleanPwd || 'admin123'
-          upsertAuthUser(localUser)
+        if (!targetUser.password) {
+          targetUser.password = cleanPwd || 'admin123'
+          upsertAuthUser(targetUser)
         }
         if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('mythree_active_user', JSON.stringify(localUser))
+          localStorage.setItem('mythree_active_user', JSON.stringify(targetUser))
         }
-        setProfile(localUser)
-        setUser({ id: localUser.user_id, email: localUser.email || `${localUser.username}@maythree.com` } as User)
+        setProfile(targetUser)
+        setUser({ id: targetUser.user_id, email: targetUser.email || `${targetUser.username}@maythree.com` } as User)
 
         // Ensure Supabase client authenticated session is established
         if (!DEMO_MODE) {
@@ -156,9 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 2. If not matched in local auth store or wrong password, attempt Supabase authentication
+    // 2. If not matched in staff credential store or wrong password, attempt direct Supabase authentication
     if (!DEMO_MODE) {
-      const emailToTry = localUser?.email || (cleanId.includes('@') ? cleanId : `${cleanId}@maythree.com`)
+      const emailToTry = targetUser?.email || (cleanId.includes('@') ? cleanId : `${cleanId}@maythree.com`)
       try {
         const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
           email: emailToTry,
