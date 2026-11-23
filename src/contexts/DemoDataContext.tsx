@@ -97,17 +97,17 @@ const initCashAccounts: CashAccount[] = [
 // ── Initial Cash Transactions across all accounts ──
 const initCashTransactions: CashTransaction[] = []
 
-// ── Products (9 core catalog products preserved with stock set strictly to 0) ──
+// ── Products (9 core catalog products preserved with stock set strictly to 0 and barcodes blank) ──
 const initProducts: Product[] = [
-  { id: '44444444-4444-4444-4444-444444444401', name: 'Maggi Noodles', category: 'Snacks', unit: 'packet', barcode: '8901234567890', cost_price: 12.00, selling_price: 15.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444402', name: 'Lays Chips (Classic)', category: 'Snacks', unit: 'packet', barcode: '8901234567891', cost_price: 16.00, selling_price: 20.00, reorder_level: 15, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444403', name: 'Dove Soap', category: 'Toiletries', unit: 'piece', barcode: '8901234567892', cost_price: 45.00, selling_price: 55.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444404', name: 'Bisleri Water (1L)', category: 'Drinks', unit: 'bottle', barcode: '8901234567893', cost_price: 14.00, selling_price: 20.00, reorder_level: 30, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444405', name: 'Notebook (200 pages)', category: 'Stationery', unit: 'piece', barcode: '8901234567894', cost_price: 28.00, selling_price: 40.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444406', name: 'Pen (Blue)', category: 'Stationery', unit: 'piece', barcode: '8901234567895', cost_price: 5.00, selling_price: 10.00, reorder_level: 25, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444407', name: 'Coca Cola (300ml)', category: 'Drinks', unit: 'bottle', barcode: '8901234567896', cost_price: 22.00, selling_price: 30.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
-  { id: '44444444-4444-4444-4444-444444444408', name: 'Colgate Toothpaste', category: 'Toiletries', unit: 'piece', barcode: '8901234567897', cost_price: 58.00, selling_price: 75.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
-  { id: '55555555-5555-5555-5555-555555555501', name: 'Magic Tumbler', category: 'Hostel Essentials', unit: 'piece', barcode: '8901234567898', cost_price: 180.00, selling_price: 250.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444401', name: 'Maggi Noodles', category: 'Snacks', unit: 'packet', barcode: '', cost_price: 12.00, selling_price: 15.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444402', name: 'Lays Chips (Classic)', category: 'Snacks', unit: 'packet', barcode: '', cost_price: 16.00, selling_price: 20.00, reorder_level: 15, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444403', name: 'Dove Soap', category: 'Toiletries', unit: 'piece', barcode: '', cost_price: 45.00, selling_price: 55.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444404', name: 'Bisleri Water (1L)', category: 'Drinks', unit: 'bottle', barcode: '', cost_price: 14.00, selling_price: 20.00, reorder_level: 30, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444405', name: 'Notebook (200 pages)', category: 'Stationery', unit: 'piece', barcode: '', cost_price: 28.00, selling_price: 40.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444406', name: 'Pen (Blue)', category: 'Stationery', unit: 'piece', barcode: '', cost_price: 5.00, selling_price: 10.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444407', name: 'Coca Cola (300ml)', category: 'Drinks', unit: 'bottle', barcode: '', cost_price: 22.00, selling_price: 30.00, reorder_level: 20, is_active: true, stock_on_hand: 0 },
+  { id: '44444444-4444-4444-4444-444444444408', name: 'Colgate Toothpaste', category: 'Toiletries', unit: 'piece', barcode: '', cost_price: 58.00, selling_price: 75.00, reorder_level: 8, is_active: true, stock_on_hand: 0 },
+  { id: '55555555-5555-5555-5555-555555555501', name: 'Magic Tumbler', category: 'Hostel Essentials', unit: 'piece', barcode: '', cost_price: 180.00, selling_price: 250.00, reorder_level: 10, is_active: true, stock_on_hand: 0 },
 ]
 
 // ── Store Sales ──
@@ -204,7 +204,7 @@ interface DemoDataContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'status' | 'approved_by'>) => Expense
   updateExpenseStatus: (id: string, status: 'approved' | 'rejected') => void
   // Cash
-  topUpCash: (accountId: string, amount: number, note?: string) => void
+  topUpCash: (targetAccountId: string, amount: number, sourceAccountId?: string, note?: string) => void
   recordCashCount: (accountId: string, countedAmount: number, note?: string) => void
   // Store
   addProduct: (product: Omit<Product, 'id'>) => Product
@@ -1231,15 +1231,66 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // ── Cash Top-up & Count ──
-  const topUpCash = useCallback((accountId: string, amount: number, note?: string) => {
-    const target = cashAccounts.find(a => a.id === accountId)
-    setCashAccounts(prev => prev.map(a => a.id === accountId ? { ...a, balance: (a.balance || 0) + amount } : a))
-    setCashTransactions(prev => [{
-      id: `ct-${Date.now()}`, account_id: accountId, txn_date: new Date().toISOString().split('T')[0],
-      direction: 'in' as const, amount, source: 'top_up' as const,
-      source_id: null, note: note || `Top-up for ${target?.name || 'Cash Account'}`, recorded_by: 'demo-admin-1'
-    }, ...prev])
+  // ── Cash Top-up & Account Transfer (H4) ──
+  const topUpCash = useCallback((targetAccountId: string, amount: number, sourceAccountId?: string, note?: string) => {
+    const target = cashAccounts.find(a => a.id === targetAccountId)
+    const source = sourceAccountId ? cashAccounts.find(a => a.id === sourceAccountId) : null
+
+    // If source account specified, ensure no overdraft on source account
+    if (source && (source.balance || 0) < amount) {
+      throw new Error(`Insufficient funds in ${source.name} (Balance: ₹${source.balance || 0}) to transfer ₹${amount}.`)
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const txns: CashTransaction[] = []
+
+    // Debit source account if provided
+    if (source) {
+      setCashAccounts(prev => prev.map(a => {
+        if (a.id === source.id) return { ...a, balance: (a.balance || 0) - amount }
+        if (a.id === targetAccountId) return { ...a, balance: (a.balance || 0) + amount }
+        return a
+      }))
+
+      const debitTxn: CashTransaction = {
+        id: `ct-transfer-out-${Date.now()}`,
+        account_id: source.id,
+        txn_date: today,
+        direction: 'out' as const,
+        amount,
+        source: 'top_up' as const,
+        source_id: null,
+        note: note ? `Transfer to ${target?.name}: ${note}` : `Transfer to ${target?.name}`,
+        recorded_by: 'Staff User'
+      }
+      txns.push(debitTxn)
+    } else {
+      setCashAccounts(prev => prev.map(a => a.id === targetAccountId ? { ...a, balance: (a.balance || 0) + amount } : a))
+    }
+
+    // Credit target account
+    const creditTxn: CashTransaction = {
+      id: `ct-topup-in-${Date.now()}`,
+      account_id: targetAccountId,
+      txn_date: today,
+      direction: 'in' as const,
+      amount,
+      source: 'top_up' as const,
+      source_id: null,
+      note: note ? (source ? `Transfer from ${source.name}: ${note}` : note) : (source ? `Transfer from ${source.name}` : `Top-up for ${target?.name || 'Cash Account'}`),
+      recorded_by: 'Staff User'
+    }
+    txns.push(creditTxn)
+
+    setCashTransactions(prev => [...txns, ...prev])
+
+    if (!DEMO_MODE) {
+      ;(supabase as any).from('cash_transactions').insert(txns).then().catch(() => {})
+      if (source) {
+        ;(supabase as any).from('cash_accounts').update({ balance: (source.balance || 0) - amount }).eq('id', source.id).then().catch(() => {})
+      }
+      ;(supabase as any).from('cash_accounts').update({ balance: (target?.balance || 0) + amount }).eq('id', targetAccountId).then().catch(() => {})
+    }
   }, [cashAccounts])
 
   const recordCashCount = useCallback((accountId: string, countedAmount: number, note?: string) => {

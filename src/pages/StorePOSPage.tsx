@@ -102,6 +102,16 @@ export function StorePOSPage() {
   const handleCheckout = () => {
     if (cart.length === 0) return
 
+    // H3: Block Account (credit) payment for Walk-in Guest
+    if (paymentMode === 'on_account' && !selectedResidentId) {
+      addToast({
+        type: 'error',
+        title: 'Resident Required',
+        description: 'Account (Credit) billing is not allowed for Walk-in Guests. Please select a resident or choose Cash/UPI.'
+      })
+      return
+    }
+
     for (const item of cart) {
       const liveProduct = products.find(p => p.id === item.product.id)
       const liveStock = liveProduct?.stock_on_hand ?? 0
@@ -360,7 +370,15 @@ export function StorePOSPage() {
                         variant={paymentMode === 'on_account' ? 'default' : 'outline'}
                         size="sm"
                         className="text-xs"
-                        onClick={() => setPaymentMode('on_account')}
+                        disabled={!selectedResidentId}
+                        title={!selectedResidentId ? 'Select an active resident first to charge to their account' : 'Charge to resident monthly account'}
+                        onClick={() => {
+                          if (!selectedResidentId) {
+                            addToast({ type: 'error', title: 'Resident Required', description: 'Credit (Account) payment requires selecting a registered resident.' })
+                            return
+                          }
+                          setPaymentMode('on_account')
+                        }}
                       >
                         <Receipt className="h-3.5 w-3.5 mr-1" /> Account
                       </Button>

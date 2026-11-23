@@ -50,7 +50,8 @@ export function CashPage() {
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>('all')
   const [showTopUp, setShowTopUp] = useState(false)
   const [showCount, setShowCount] = useState(false)
-  const [topUpAccount, setTopUpAccount] = useState<string>('')
+  const [topUpSourceAccount, setTopUpSourceAccount] = useState<string>('ca-4')
+  const [topUpAccount, setTopUpAccount] = useState<string>('ca-1')
   const [topUpAmount, setTopUpAmount] = useState('')
   const [topUpNote, setTopUpNote] = useState('')
   const [countAccount, setCountAccount] = useState<string>('')
@@ -75,13 +76,28 @@ export function CashPage() {
       return
     }
 
-    const account = cashAccounts.find(a => a.id === topUpAccount)
-    topUpCash(topUpAccount, amt, topUpNote || `Top-up for ${account?.name}`)
-    addToast({ type: 'success', title: 'Top-up successful', description: `${formatCurrency(amt)} added to ${account?.name}` })
-    setShowTopUp(false)
-    setTopUpAmount('')
-    setTopUpNote('')
-    setTopUpAccount('')
+    if (topUpSourceAccount && topUpSourceAccount === topUpAccount) {
+      addToast({ type: 'error', title: 'Invalid transfer', description: 'Source and destination accounts must be different.' })
+      return
+    }
+
+    try {
+      const destAccount = cashAccounts.find(a => a.id === topUpAccount)
+      const srcAccount = cashAccounts.find(a => a.id === topUpSourceAccount)
+      topUpCash(topUpAccount, amt, topUpSourceAccount || undefined, topUpNote || undefined)
+      addToast({
+        type: 'success',
+        title: 'Transfer successful',
+        description: srcAccount 
+          ? `${formatCurrency(amt)} transferred from ${srcAccount.name} to ${destAccount?.name}`
+          : `${formatCurrency(amt)} added to ${destAccount?.name}`
+      })
+      setShowTopUp(false)
+      setTopUpAmount('')
+      setTopUpNote('')
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Transfer failed', description: err.message || 'Error processing top-up' })
+    }
   }
 
   const handleCount = () => {
@@ -294,27 +310,40 @@ export function CashPage() {
         </CardContent>
       </Card>
 
-      {/* Top-up Dialog */}
+      {/* Top-up & Account Transfer Dialog (H4) */}
       <Dialog open={showTopUp} onClose={() => setShowTopUp(false)}>
         <DialogHeader>
-          <DialogTitle>Account Top-up</DialogTitle>
+          <DialogTitle>Transfer / Top-up Account Funds</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Target Account *</Label>
+            <Label>Source Account (Funds Coming From) *</Label>
+            <select
+              value={topUpSourceAccount}
+              onChange={(e) => setTopUpSourceAccount(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+            >
+              <option value="">Direct Bank Deposit / Initial Float</option>
+              {cashAccounts.map(ca => (
+                <option key={ca.id} value={ca.id}>{ca.name} (Available: {formatCurrency(ca.balance || 0)})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Destination Account (Funds Going To) *</Label>
             <select
               value={topUpAccount}
               onChange={(e) => setTopUpAccount(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
             >
-              <option value="">Select account...</option>
+              <option value="">Select destination account...</option>
               {cashAccounts.map(ca => (
                 <option key={ca.id} value={ca.id}>{ca.name} (Current: {formatCurrency(ca.balance || 0)})</option>
               ))}
             </select>
           </div>
           <div>
-            <Label>Top-up Amount (₹) *</Label>
+            <Label>Transfer Amount (₹) *</Label>
             <Input
               type="number"
               value={topUpAmount}
@@ -330,13 +359,13 @@ export function CashPage() {
               value={topUpNote}
               onChange={(e) => setTopUpNote(e.target.value)}
               className="mt-1"
-              placeholder="e.g. Vault top-up from bank"
+              placeholder="e.g. Petty cash replenishment from bank"
             />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowTopUp(false)}>Cancel</Button>
-          <Button onClick={handleTopUp} disabled={!topUpAccount || !topUpAmount}>Deposit Funds</Button>
+          <Button onClick={handleTopUp} disabled={!topUpAccount || !topUpAmount}>Transfer Funds</Button>
         </DialogFooter>
       </Dialog>
 
