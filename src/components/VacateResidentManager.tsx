@@ -143,13 +143,22 @@ export function VacateResidentManager() {
 
     // Current month calculation
     const daysInCurrentMonth = new Date(vacYear, vacMonth + 1, 0).getDate()
+    
+    // C4: Count from max(admission date, 1st of month) to checkout date, inclusive
+    const firstOfMonthStr = `${vacYear}-${(vacMonth + 1).toString().padStart(2, '0')}-01`
+    const admDateStr = selectedResident.check_in_date || firstOfMonthStr
+    const effectiveStartDateStr = admDateStr > firstOfMonthStr ? admDateStr : firstOfMonthStr
+    
+    const startDay = new Date(effectiveStartDateStr).getDate()
+    const daysStayed = Math.max(1, Math.min(daysInCurrentMonth, vacDay - startDay + 1))
+
     let currentMonthRentDue = monthlyRent
     let currentMonthLabel = `${monthNames[vacMonth]} ${vacYear}`
 
     if (localRentRule === 'per_day') {
       const dailyRate = monthlyRent / daysInCurrentMonth
-      currentMonthRentDue = Math.round(dailyRate * Math.min(vacDay, daysInCurrentMonth))
-      currentMonthLabel = `${monthNames[vacMonth]} ${vacYear} (${vacDay} days pro-rata)`
+      currentMonthRentDue = Math.round(dailyRate * daysStayed)
+      currentMonthLabel = `${monthNames[vacMonth]} ${vacYear} (${daysStayed} days pro-rata)`
     } else {
       currentMonthLabel = `${monthNames[vacMonth]} ${vacYear} (Full Month)`
     }
@@ -161,6 +170,7 @@ export function VacateResidentManager() {
       .reduce((sum, p) => sum + p.amount, 0)
 
     const currentMonthBalance = Math.max(0, currentMonthRentDue - paidForCurrentMonth)
+    const currentMonthExcessPaid = Math.max(0, paidForCurrentMonth - currentMonthRentDue)
 
     // If previous dues exist, represent prior month balance
     const priorDues = Math.max(0, generalBalance - monthlyRent)
@@ -184,7 +194,7 @@ export function VacateResidentManager() {
       amount_paid: paidForCurrentMonth,
       balance: currentMonthBalance,
       is_current_month: true,
-      days_stayed: vacDay,
+      days_stayed: daysStayed,
       total_days: daysInCurrentMonth
     })
 
@@ -195,12 +205,23 @@ export function VacateResidentManager() {
     return rentBreakdown.reduce((sum, item) => sum + item.balance, 0)
   }, [rentBreakdown])
 
+  // C5: Calculate excess rent paid across months (e.g. resident paid full month but checked out early)
+  const totalExcessRentPaid = useMemo(() => {
+    if (!selectedResident) return 0
+    return rentBreakdown.reduce((sum, item) => {
+      if (item.amount_paid > item.rent_due) {
+        return sum + (item.amount_paid - item.rent_due)
+      }
+      return sum
+    }, 0)
+  }, [rentBreakdown, selectedResident])
+
   const totalOtherDeductions = useMemo(() => {
     return deductionsList.reduce((sum, item) => sum + item.amount, 0)
   }, [deductionsList])
 
-  // Final Net Calculation: Advance - Pending Rent - Other Deductions
-  const netSettlement = depositHeld - totalRentDue - totalOtherDeductions
+  // Final Net Calculation: Advance - Pending Rent - Other Deductions + Excess Rent Paid (C5)
+  const netSettlement = depositHeld - totalRentDue - totalOtherDeductions + totalExcessRentPaid
   const settlementType: SettlementType = netSettlement > 0 ? 'refund' : netSettlement < 0 ? 'collected' : 'settled'
   const absoluteSettlementAmount = Math.abs(netSettlement)
 
@@ -659,6 +680,7 @@ export function VacateResidentManager() {
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       Advance ({formatCurrency(depositHeld)}) − Unpaid Rent ({formatCurrency(totalRentDue)}) − Deductions ({formatCurrency(totalOtherDeductions)})
+                      {totalExcessRentPaid > 0 && ` + Excess Rent Paid (${formatCurrency(totalExcessRentPaid)})`}
                     </p>
                   </div>
 

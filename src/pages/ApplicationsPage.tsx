@@ -23,6 +23,7 @@ type QueueTab = 'pending' | 'ready' | 'rejected' | 'all'
 export function ApplicationsPage() {
   const {
     applications,
+    residents,
     beds,
     rooms,
     roomTypes,
@@ -118,12 +119,17 @@ export function ApplicationsPage() {
   const readyCount = applications.filter(a => a.status === 'approved' && !a.review_note?.includes('bed allocated')).length
   const rejectedCount = applications.filter(a => a.status === 'rejected').length
 
+  // Set of application IDs that already hold an active bed / resident record (H2)
+  const activeResidentAppIds = useMemo(() => {
+    return new Set(residents.filter(r => r.status === 'active').map(r => r.application_id))
+  }, [residents])
+
   // Filtered applications
   const filtered = useMemo(() => {
     return applications
       .filter(a => {
         if (tab === 'pending') return isPendingStatus(a.status)
-        if (tab === 'ready') return a.status === 'approved' && !a.review_note?.includes('bed allocated')
+        if (tab === 'ready') return a.status === 'approved' && !a.review_note?.includes('bed allocated') && !activeResidentAppIds.has(a.id)
         if (tab === 'rejected') return a.status === 'rejected'
         return true
       })
@@ -136,7 +142,7 @@ export function ApplicationsPage() {
           a.occupation.toLowerCase().includes(q)
       })
       .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
-  }, [applications, tab, search])
+  }, [applications, tab, search, activeResidentAppIds])
 
   // Vacant beds filtered by room type
   const availableBedsByType = useMemo(() => {
@@ -219,12 +225,32 @@ export function ApplicationsPage() {
   // Confirm Bed Allocation
   const handleConfirmAllocate = () => {
     if (!selectedApp || !selectedBedId || !checkInDate) return
+
+    const rent = Number(customMonthlyRent)
+    const deposit = Number(depositAmount)
+
+    // C1: Block Confirm until both have valid amounts above zero
+    if (isNaN(rent) || rent <= 0) {
+      addToast({
+        type: 'error',
+        title: 'Monthly Rent Required',
+        description: 'Please enter a valid monthly rent amount greater than ₹0.'
+      })
+      return
+    }
+
+    if (isNaN(deposit) || deposit <= 0) {
+      addToast({
+        type: 'error',
+        title: 'Advance Security Deposit Required',
+        description: 'Please enter a valid advance deposit amount greater than ₹0.'
+      })
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
-      const deposit = depositAmount ? Number(depositAmount) : (selectedRoomType?.rent_per_head || 8000) * 2
-      const rent = customMonthlyRent ? Number(customMonthlyRent) : (selectedRoomType?.rent_per_head || 8000)
-
       allocateBed(
         selectedApp.id,
         selectedBedId,
@@ -877,10 +903,15 @@ export function ApplicationsPage() {
                   ) : (
                     availableBedsByType.map(({ bed, room, hasAC }) => {
                       const isBedSelected = selectedBedId === bed.id
+                      const bedRate = hasAC ? 13000 : (selectedRoomType?.rent_per_head || 8000)
                       return (
                         <div
                           key={bed.id}
-                          onClick={() => setSelectedBedId(bed.id)}
+                          onClick={() => {
+                            setSelectedBedId(bed.id)
+                            setCustomMonthlyRent(String(bedRate))
+                            setDepositAmount(String(bedRate * 2))
+                          }}
                           className={`flex items-center justify-between p-2.5 border rounded-lg cursor-pointer transition-colors ${
                             isBedSelected
                               ? 'border-primary bg-primary/10 shadow-sm'
@@ -892,7 +923,11 @@ export function ApplicationsPage() {
                               type="radio"
                               name="bedSelect"
                               checked={isBedSelected}
-                              onChange={() => setSelectedBedId(bed.id)}
+                              onChange={() => {
+                                setSelectedBedId(bed.id)
+                                setCustomMonthlyRent(String(bedRate))
+                                setDepositAmount(String(bedRate * 2))
+                              }}
                               className="text-primary"
                             />
                             <div>
@@ -1017,7 +1052,15 @@ export function ApplicationsPage() {
             </Button>
             <Button
               size="sm"
-              disabled={!selectedBedId || !checkInDate || isSubmitting}
+              disabled={
+                !selectedBedId ||
+                !checkInDate ||
+                !customMonthlyRent ||
+                Number(customMonthlyRent) <= 0 ||
+                !depositAmount ||
+                Number(depositAmount) <= 0 ||
+                isSubmitting
+              }
               onClick={handleConfirmAllocate}
               className="text-xs gap-1.5 bg-primary"
             >

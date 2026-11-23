@@ -949,6 +949,18 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       throw new Error(`Resident ${params.residentId} not found`)
     }
 
+    const settlementAmt = Math.abs(Number(params.settlementAmount) || 0)
+    const isRefund = params.settlementType === 'refund'
+
+    // C6: Check overdraft on refund
+    if (isRefund && settlementAmt > 0 && params.accountId) {
+      const targetAcc = cashAccounts.find(a => a.id === params.accountId)
+      const currentBal = targetAcc?.balance || 0
+      if (settlementAmt > currentBal) {
+        throw new Error(`Insufficient funds in ${targetAcc?.name || 'Account'} to process refund. Balance: ₹${currentBal}, Refund: ₹${settlementAmt}. Please top up the account first.`)
+      }
+    }
+
     const room = rooms.find(rm => rm.id === resident.bed?.room_id)
     const residentName = resident.application?.full_name || 'Resident'
     const roomNo = room?.room_no || resident.bed?.room?.room_no || '—'
@@ -1167,39 +1179,50 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     return newPayment
   }, [payments.length])
 
-  // ── Expenses (influences Petty Cash / Bank & Operating Expenses on Reports) ──
+  // ── Expenses (influences Petty Cash / Bank / UPI & Operating Expenses on Reports) ──
   const addExpense = useCallback((expense: Omit<Expense, 'id' | 'status' | 'approved_by'>): Expense => {
+    // Resolve target account for debit
+    let targetAccId = 'ca-1'
+    if (expense.paid_from === 'bank') targetAccId = 'ca-4'
+    else if (expense.paid_from === 'upi') targetAccId = 'ca-5'
+    else if (expense.paid_from === 'petty_cash') targetAccId = 'ca-1'
+    else {
+      const match = cashAccounts.find(a => a.id === expense.paid_from || a.kind === expense.paid_from)
+      if (match) targetAccId = match.id
+    }
+
+    const targetAccount = cashAccounts.find(a => a.id === targetAccId)
+    const currentBalance = targetAccount?.balance || 0
+
+    // C6: Overdraft check - prevent account from going below ₹0
+    if (expense.amount > currentBalance) {
+      throw new Error(`Insufficient funds in ${targetAccount?.name || 'Account'}. Current balance: ₹${currentBalance}, required: ₹${expense.amount}.`)
+    }
+
     const newExpense: Expense = {
       ...expense,
       id: `exp-${Date.now()}`,
-      status: 'recorded',
-      approved_by: null,
+      status: 'approved', // M13: Immediately approved & debited without pending approval step
+      approved_by: 'system',
     }
     setExpenses(prev => [newExpense, ...prev])
 
-    // Debit account based on paid_from
-    if (expense.paid_from === 'petty_cash') {
-      setCashAccounts(prev => prev.map(a => a.id === 'ca-1' ? { ...a, balance: (a.balance || 0) - expense.amount } : a))
-      setCashTransactions(prev => [{
-        id: `ct-${Date.now()}`, account_id: 'ca-1', txn_date: expense.expense_date,
-        direction: 'out' as const, amount: expense.amount, source: 'expense' as const,
-        source_id: newExpense.id, note: expense.description, recorded_by: expense.recorded_by
-      }, ...prev])
-    } else if (expense.paid_from === 'bank') {
-      setCashAccounts(prev => prev.map(a => a.id === 'ca-4' ? { ...a, balance: (a.balance || 0) - expense.amount } : a))
-      setCashTransactions(prev => [{
-        id: `ct-${Date.now()}`, account_id: 'ca-4', txn_date: expense.expense_date,
-        direction: 'out' as const, amount: expense.amount, source: 'expense' as const,
-        source_id: newExpense.id, note: expense.description, recorded_by: expense.recorded_by
-      }, ...prev])
-    }
+    // Debit target account immediately
+    setCashAccounts(prev => prev.map(a => a.id === targetAccId ? { ...a, balance: (a.balance || 0) - expense.amount } : a))
+    setCashTransactions(prev => [{
+      id: `ct-${Date.now()}`, account_id: targetAccId, txn_date: expense.expense_date,
+      direction: 'out' as const, amount: expense.amount, source: 'expense' as const,
+      source_id: newExpense.id, note: expense.description, recorded_by: expense.recorded_by
+    }, ...prev])
 
     if (!DEMO_MODE) {
       (supabase as any).from('expenses').insert([newExpense]).then()
+      const finalBal = currentBalance - expense.amount
+      ;(supabase as any).from('cash_accounts').update({ balance: finalBal }).eq('id', targetAccId).then().catch(() => {})
     }
 
     return newExpense
-  }, [])
+  }, [cashAccounts])
 
   const updateExpenseStatus = useCallback((id: string, status: 'approved' | 'rejected') => {
     setExpenses(prev => prev.map(e => e.id === id ? { ...e, status, approved_by: status === 'approved' ? 'demo-admin-1' : null } : e))
@@ -1337,6 +1360,25 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Store: Purchases (Increments stock, debits cash/bank) ──
   const recordPurchase = useCallback((vendorId: string | null, invoiceNo: string, paidFrom: string, items: { productId: string; qty: number; unitCost: number }[]): StockPurchase => {
+    const total = items.reduce((s, i) => s + i.qty * i.unitCost, 0)
+
+    // C6: Overdraft check on purchase
+    let targetAccId = 'ca-1'
+    if (paidFrom === 'bank') targetAccId = 'ca-4'
+    else if (paidFrom === 'upi') targetAccId = 'ca-5'
+    else if (paidFrom === 'petty_cash') targetAccId = 'ca-1'
+    else {
+      const match = cashAccounts.find(a => a.id === paidFrom || a.kind === paidFrom)
+      if (match) targetAccId = match.id
+    }
+
+    const targetAccount = cashAccounts.find(a => a.id === targetAccId)
+    const currentBalance = targetAccount?.balance || 0
+
+    if (total > currentBalance) {
+      throw new Error(`Insufficient funds in ${targetAccount?.name || 'Account'} to record purchase. Balance: ₹${currentBalance}, required: ₹${total}.`)
+    }
+
     const purchaseId = `sp-${Date.now()}`
     const purchaseDate = new Date().toISOString().split('T')[0]
 

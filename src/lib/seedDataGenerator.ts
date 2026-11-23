@@ -24,10 +24,12 @@ export const seedFlats: Flat[] = [
   { id: 'f-j', code: 'J', bhk: 3, floor: 1 },
 ]
 
-// AC Rooms
+// AC Rooms - Rooms 217, 218, 219 are AC at rate ₹13,000/month
 export const seedAcRoomIds = new Set([
-  'room-301', 'room-303', 'room-305', 'room-307', 'room-309',
-  'room-311', 'room-313', 'room-315', 'room-317', 'room-319'
+  'room-217', 'room-218', 'room-219',
+  'ea6534b3-3c06-4b6d-9dcb-788acde66d00', // Room 217 DB UUID
+  '26cb6cac-1290-4da1-ad8b-dd939e66b208', // Room 218 DB UUID
+  'c3da59cd-fb04-4c7f-be7c-2c860d1af7d4', // Room 219 DB UUID
 ])
 
 const RESIDENT_NAMES = [
