@@ -118,9 +118,9 @@ const initStockMovements: StockMovement[] = []
 
 // ── Staff ──
 const initStaff: StaffProfile[] = [
-  { user_id: 'usr-hadi-admin', name: 'Hadi Muhammad', role: 'admin', email: 'hadimajestic@gmail.com', username: 'hadi.admin' },
-  { user_id: 'usr-latheef-admin', name: 'Abdul Latheef CM', role: 'admin', email: 'abdullatheefcm@gmail.com', username: 'latheef.admin' },
-  { user_id: 'usr-mythree-staff', name: 'Mythree Hostel Staff', role: 'staff', email: 'mythreehostel@gmail.com', username: 'mythree.staff' },
+  { user_id: 'a0b1b6ac-c20f-4be1-ae43-02ef283661a1', name: 'Hadi Muhammad', role: 'admin', email: 'hadimajestic@gmail.com', username: 'hadi.admin' },
+  { user_id: '6fb5cf6c-cef0-4864-8f08-20d3825273e1', name: 'Abdul Latheef CM', role: 'admin', email: 'abdullatheefcm@gmail.com', username: 'latheef.admin' },
+  { user_id: '68aa5870-a6d0-4183-8525-71c5a4fac82b', name: 'Mythree Hostel Staff', role: 'staff', email: 'mythreehostel@gmail.com', username: 'mythree.staff' },
 ]
 
 // Helper to safely read from localStorage
