@@ -19,6 +19,8 @@ export interface PrintTemplateProps {
   signatoryName?: string
   declarationText?: string
   termsNote?: string
+  customerSignatureLabel?: string
+  customerSignatureSubtext?: string
 }
 
 export function PrintTemplate({
@@ -31,6 +33,8 @@ export function PrintTemplate({
   signatoryName = 'Staff Incharge',
   declarationText = 'All dues settled. Room vacated and keys returned in good order.',
   termsNote,
+  customerSignatureLabel = 'Resident / Guest Signature',
+  customerSignatureSubtext = 'I confirm receipt and acknowledgement',
 }: PrintTemplateProps) {
   return (
     <div className="printable-document bg-white text-black p-6 sm:p-8 font-sans max-w-[210mm] mx-auto">
@@ -157,8 +161,8 @@ export function PrintTemplate({
           <div className="grid grid-cols-2 gap-8 pt-8 border-t border-neutral-300 text-xs">
             <div className="text-center space-y-1">
               <div className="border-b border-black w-48 mx-auto h-8 mb-2" />
-              <p className="font-bold text-neutral-900">Resident / Guest Signature</p>
-              <p className="text-[10px] text-neutral-500">I confirm the above settlement & keys returned</p>
+              <p className="font-bold text-neutral-900">{customerSignatureLabel}</p>
+              <p className="text-[10px] text-neutral-500">{customerSignatureSubtext}</p>
             </div>
             <div className="text-center space-y-1">
               <div className="border-b border-black w-48 mx-auto h-8 mb-2" />

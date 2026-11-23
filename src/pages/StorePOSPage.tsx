@@ -502,16 +502,17 @@ export function StorePOSPage() {
             {/* Isolated Printable Payload */}
             <div ref={posPrintRef} className="border rounded-xl overflow-hidden max-h-[75vh] overflow-y-auto">
               <PrintTemplate
-                documentTitle="STORE POS TAX INVOICE & CASH RECEIPT"
+                documentTitle="STORE CASH RECEIPT"
                 referenceNo={`ORD-${completedReceipt.id.slice(-8)}`}
                 date={completedReceipt.date}
                 guestDetails={{
                   name: completedReceipt.residentName || 'Walk-in Customer',
-                  duration: `Mode: ${completedReceipt.mode.toUpperCase()}`,
                 }}
                 signatoryName="Store Incharge"
                 declarationText="Goods sold are inspected and delivered in satisfactory condition. Keep this receipt for any store queries."
                 termsNote={`Payment Mode: ${completedReceipt.mode.toUpperCase()}`}
+                customerSignatureLabel="Customer Signature"
+                customerSignatureSubtext="Received items in good order"
               >
                 <table className="w-full text-xs border border-neutral-300">
                   <thead>
@@ -544,7 +545,7 @@ export function StorePOSPage() {
                     ))}
                     <tr className="bg-[#10375C]/10 border-t-2 border-neutral-900 font-bold text-sm">
                       <td colSpan={4} className="p-2.5 text-right text-neutral-900">
-                        TOTAL AMOUNT PAID:
+                        {completedReceipt.mode === 'on_account' ? 'CHARGED TO RESIDENT ACCOUNT:' : 'TOTAL AMOUNT PAID:'}
                       </td>
                       <td className="p-2.5 text-right font-mono font-black text-[#10375C]">
                         {formatCurrency(completedReceipt.total)}

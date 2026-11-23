@@ -38,9 +38,24 @@ async function fileToDataUri(file: File): Promise<string> {
 
 const personalSchema = z.object({
   full_name: z.string().min(2, 'Name is required'),
-  dob: z.string().min(1, 'Date of birth is required'),
+  dob: z.string().min(1, 'Date of birth is required').refine((val) => {
+    const dobDate = new Date(val)
+    const today = new Date()
+    if (isNaN(dobDate.getTime())) return false
+    if (dobDate > today) return false
+    // M10: Minimum applicant age is 16
+    const minAgeDate = new Date(today.getFullYear() - 16, today.getMonth(), today.getDate())
+    return dobDate <= minAgeDate
+  }, {
+    message: 'Applicant must be at least 16 years of age and DOB cannot be in the future'
+  }),
   phone: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-  email: z.string().email('Enter a valid email').or(z.literal('')).optional(),
+  email: z.string().refine((val) => {
+    if (!val || val.trim() === '') return true
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())
+  }, {
+    message: 'Enter a valid email'
+  }).optional(),
   preferred_room_type_id: z.string().min(1, 'Select a room preference'),
   preferred_ac: z.enum(['yes', 'no', 'any']),
 })
@@ -51,6 +66,27 @@ const addressSchema = z.object({
   institution_or_employer: z.string().min(2, 'Institution/employer is required'),
   id_proof_type: z.string().min(1, 'Select ID proof type'),
   id_proof_no: z.string().min(4, 'Enter ID proof number'),
+}).superRefine((data, ctx) => {
+  // L6: Specific ID proof length rules
+  const type = data.id_proof_type.toLowerCase()
+  const no = data.id_proof_no.trim()
+  if (type.includes('aadhaar')) {
+    if (!/^\d{12}$/.test(no.replace(/\s+/g, ''))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['id_proof_no'],
+        message: 'Aadhaar must be 12 digits'
+      })
+    }
+  } else if (type.includes('pan')) {
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(no)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['id_proof_no'],
+        message: 'PAN must be 10 alphanumeric characters (e.g. ABCDE1234F)'
+      })
+    }
+  }
 })
 
 const emergencySchema = z.object({
@@ -98,10 +134,27 @@ export function ApplyPage() {
       if (valid) { setAddressData(addressForm.getValues()); setStep(3) }
     } else if (step === 3) {
       const valid = await emergencyForm.trigger()
-      if (valid) { setEmergencyData(emergencyForm.getValues()); setStep(4) }
+      if (valid) {
+        const emValues = emergencyForm.getValues()
+        // L7: Warn if emergency phone equals applicant phone
+        if (personalData && emValues.emergency_phone === personalData.phone) {
+          if (!window.confirm('Warning: Emergency contact phone number is identical to the applicant mobile number. Are you sure you want to proceed with this?')) {
+            return
+          }
+        }
+        setEmergencyData(emValues)
+        setStep(4)
+      }
     } else if (step === 4) {
-      if (!documents.photo) { alert('Please upload a photo'); return }
-      if (!documents.id_proof) { alert('Please upload ID proof'); return }
+      // M12: Show which upload is missing
+      const missingUploads: string[] = []
+      if (!documents.photo) missingUploads.push('Applicant Photo')
+      if (!documents.id_proof) missingUploads.push('ID Proof Document')
+      
+      if (missingUploads.length > 0) {
+        alert(`Please upload the following required documents before proceeding:\n• ${missingUploads.join('\n• ')}`)
+        return
+      }
       setStep(5)
     }
   }
@@ -219,6 +272,7 @@ export function ApplyPage() {
               <div>
                 <Label htmlFor="email">Email (optional)</Label>
                 <Input id="email" type="email" {...personalForm.register('email')} placeholder="your@email.com" className="mt-1" />
+                {personalForm.formState.errors.email && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.email.message}</p>}
               </div>
               <div>
                 <Label>Room Preference *</Label>

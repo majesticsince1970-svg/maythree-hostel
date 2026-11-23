@@ -532,7 +532,16 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const roomNo = room?.room_no || res?.bed?.room?.room_no || '—'
     const bedLabel = res?.bed?.bed_label || 'A'
     const resName = res?.application?.full_name || 'Resident'
-    const nowTime = new Date().toISOString().replace('T', ' ').slice(0, 16)
+    // M9: Display all dates and times in Asia/Kolkata
+    const nowTime = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
 
     const newMov: AttendanceMovement = {
       id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -564,19 +573,26 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const totalPaid = payments.filter(p => p.period_month === currentMonth).reduce((s, p) => s + p.amount, 0)
 
     const roomMap = new Map(rooms.map(r => [r.id, r]))
+    const twinType = roomTypes.find(rt => rt.name.toLowerCase().includes('twin') || rt.beds_per_room === 2)
+    const singleType = roomTypes.find(rt => rt.name.toLowerCase().includes('single') || rt.beds_per_room === 1)
+    const fourType = roomTypes.find(rt => rt.name.toLowerCase().includes('4') || rt.beds_per_room === 4)
+
     const twinVacant = beds.filter(b => {
       if (b.status !== 'available') return false
       const rm = roomMap.get(b.room_id)
+      if (rm && twinType) return rm.room_type_id === twinType.id
       return rm ? (rm.floor === 2 || rm.room_no.startsWith('2')) : b.room_id.startsWith('room-2')
     }).length
     const singleVacant = beds.filter(b => {
       if (b.status !== 'available') return false
       const rm = roomMap.get(b.room_id)
+      if (rm && singleType) return rm.room_type_id === singleType.id
       return rm ? (rm.floor === 3 || rm.room_no.startsWith('3')) : b.room_id.startsWith('room-3')
     }).length
     const fourVacant = beds.filter(b => {
       if (b.status !== 'available') return false
       const rm = roomMap.get(b.room_id)
+      if (rm && fourType) return rm.room_type_id === fourType.id
       return rm ? (rm.floor !== 2 && rm.floor !== 3 && !rm.room_no.startsWith('2') && !rm.room_no.startsWith('3')) : (!b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3'))
     }).length
 
@@ -598,43 +614,60 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         { category: '4-Sharing', count: fourVacant },
       ]
     }
-  }, [beds, rooms, applications, residents, payments, attendanceStats])
+  }, [beds, rooms, roomTypes, applications, residents, payments, attendanceStats])
 
   const publicRoomOptions = useMemo<PublicRoomOption[]>(() => {
     const roomMap = new Map(rooms.map(r => [r.id, r]))
+    const twinType = roomTypes.find(rt => rt.name.toLowerCase().includes('twin') || rt.beds_per_room === 2)
+    const singleType = roomTypes.find(rt => rt.name.toLowerCase().includes('single') || rt.beds_per_room === 1)
+    const fourType = roomTypes.find(rt => rt.name.toLowerCase().includes('4') || rt.beds_per_room === 4)
+
     return [
       {
         room_type: 'Twin Sharing · Non-AC',
         has_ac: false,
-        rent_per_head: roomTypes[0]?.rent_per_head || 8000,
+        rent_per_head: twinType?.rent_per_head || 8000,
         beds_available: beds.filter(b => {
           if (b.status !== 'available') return false
           const rm = roomMap.get(b.room_id)
+          if (rm && twinType) return rm.room_type_id === twinType.id && !acRoomsState.has(rm.id) && !acRoomsState.has(`room-${rm.room_no}`)
           return rm ? (rm.floor === 2 || rm.room_no.startsWith('2')) : b.room_id.startsWith('room-2')
+        }).length
+      },
+      {
+        room_type: 'Twin Sharing · ❄️ AC (Rooms 217-219)',
+        has_ac: true,
+        rent_per_head: 13000,
+        beds_available: beds.filter(b => {
+          if (b.status !== 'available') return false
+          const rm = roomMap.get(b.room_id)
+          return rm ? (acRoomsState.has(rm.id) || acRoomsState.has(`room-${rm.room_no}`) || ['217', '218', '219'].includes(rm.room_no)) : false
         }).length
       },
       {
         room_type: 'Single Room · Non-AC',
         has_ac: false,
-        rent_per_head: roomTypes[1]?.rent_per_head || 10000,
+        rent_per_head: singleType?.rent_per_head || 10000,
         beds_available: beds.filter(b => {
           if (b.status !== 'available') return false
           const rm = roomMap.get(b.room_id)
+          if (rm && singleType) return rm.room_type_id === singleType.id
           return rm ? (rm.floor === 3 || rm.room_no.startsWith('3')) : b.room_id.startsWith('room-3')
         }).length
       },
       {
         room_type: '4-Sharing · Non-AC',
         has_ac: false,
-        rent_per_head: roomTypes[2]?.rent_per_head || 7000,
+        rent_per_head: fourType?.rent_per_head || 7000,
         beds_available: beds.filter(b => {
           if (b.status !== 'available') return false
           const rm = roomMap.get(b.room_id)
+          if (rm && fourType) return rm.room_type_id === fourType.id
           return rm ? (rm.floor !== 2 && rm.floor !== 3 && !rm.room_no.startsWith('2') && !rm.room_no.startsWith('3')) : (!b.room_id.startsWith('room-2') && !b.room_id.startsWith('room-3'))
         }).length
       },
     ].filter(o => o.beds_available > 0)
-  }, [beds, rooms, roomTypes])
+  }, [beds, rooms, roomTypes, acRoomsState])
 
   const rentDueList = useMemo<RentDueView[]>(() => {
     const currentMonth = new Date().toISOString().slice(0, 7)

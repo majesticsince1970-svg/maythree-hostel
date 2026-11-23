@@ -54,7 +54,7 @@ export function ExpensesPage() {
   const { profile, isAdmin } = useAuth()
   const { addToast } = useToast()
   const [showForm, setShowForm] = useState(false)
-  const [filterMonth, setFilterMonth] = useState('2026-10')
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7))
   const [filterCategory, setFilterCategory] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -212,8 +212,8 @@ export function ExpensesPage() {
                   <TableCell className="font-bold text-foreground">{formatCurrency(exp.amount)}</TableCell>
                   <TableCell className="capitalize text-xs">{exp.paid_from.replace('_', ' ')}</TableCell>
                   <TableCell>
-                    <Badge variant={exp.status === 'approved' ? 'success' : exp.status === 'rejected' ? 'destructive' : 'warning'}>
-                      {exp.status}
+                    <Badge variant="success">
+                      Approved
                     </Badge>
                   </TableCell>
                   {isAdmin && (
@@ -280,8 +280,9 @@ export function ExpensesPage() {
             <div>
               <Label>Paid From *</Label>
               <select {...form.register('paid_from')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
-                <option value="petty_cash">Petty Cash</option>
-                <option value="bank">Bank / UPI Transfer</option>
+                <option value="petty_cash">Petty Cash Vault</option>
+                <option value="bank">Hostel Bank Account</option>
+                <option value="upi">Hostel UPI Account</option>
               </select>
             </div>
           </div>

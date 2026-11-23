@@ -310,7 +310,7 @@ export function PaymentsPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">Bank NEFT/IMPS</p>
                 <p className="text-xl font-bold text-foreground mt-0.5">{formatCurrency(bankTotal)}</p>
-                <p className="text-[11px] text-muted-foreground">Oct Collection</p>
+                <p className="text-[11px] text-muted-foreground">{new Date().toLocaleDateString('en-US', { month: 'short' })} Collection</p>
               </div>
             </div>
           </CardContent>
@@ -323,7 +323,7 @@ export function PaymentsPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">UPI / QR Code</p>
                 <p className="text-xl font-bold text-foreground mt-0.5">{formatCurrency(upiTotal)}</p>
-                <p className="text-[11px] text-muted-foreground">Oct Collection</p>
+                <p className="text-[11px] text-muted-foreground">{new Date().toLocaleDateString('en-US', { month: 'short' })} Collection</p>
               </div>
             </div>
           </CardContent>
@@ -540,6 +540,13 @@ export function PaymentsPage() {
       <Dialog open={!!receiptPayment} onClose={() => setReceiptPayment(null)}>
         {receiptPayment && (() => {
           const res = residents.find(r => r.id === receiptPayment.resident_id)
+          const monthlyRent = res?.monthly_rent || 0
+          const paidForMonth = payments
+            .filter(p => p.resident_id === receiptPayment.resident_id && p.period_month === receiptPayment.period_month)
+            .reduce((s, p) => s + p.amount, 0)
+          const remainingBal = Math.max(0, monthlyRent - paidForMonth)
+          const isFullPaid = remainingBal === 0
+
           return (
             <div className="space-y-4">
               <div className="flex items-center justify-between no-print border-b pb-2">
@@ -581,7 +588,11 @@ export function PaymentsPage() {
                     duration: `Month: ${receiptPayment.period_month}`,
                   }}
                   signatoryName={profile?.name || 'Authorised Staff'}
-                  declarationText="Payment received in full and credited to resident ledger. This is a computer generated official acknowledgement."
+                  declarationText={
+                    isFullPaid
+                      ? "Payment received in full and credited to resident ledger. This is a computer generated official acknowledgement."
+                      : `Part-payment received and credited to resident ledger. Monthly Rent: ₹${monthlyRent.toLocaleString('en-IN')}, Total Paid for Month: ₹${paidForMonth.toLocaleString('en-IN')}, Balance Remaining: ₹${remainingBal.toLocaleString('en-IN')}.`
+                  }
                   termsNote={`Mode of payment: ${receiptPayment.mode.toUpperCase()}${receiptPayment.reference ? ` · Ref: ${receiptPayment.reference}` : ''}`}
                 >
                   <table className="w-full text-xs border border-neutral-300">

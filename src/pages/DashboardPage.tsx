@@ -91,7 +91,7 @@ export function DashboardPage() {
       {/* Rent & Finance cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/payments')}>
-          <StatCard title="Rent Expected (Oct)" value={formatCurrency(s.rent_due_this_month)} icon={IndianRupee} iconColor="text-orange-600" />
+          <StatCard title={`Rent Expected (${new Date().toLocaleDateString('en-US', { month: 'short' })})`} value={formatCurrency(s.rent_due_this_month)} icon={IndianRupee} iconColor="text-orange-600" />
         </div>
         <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/payments')}>
           <StatCard title="Rent Collected" value={formatCurrency(s.rent_collected_this_month)} icon={TrendingUp} iconColor="text-green-600" subtitle={`${s.rent_due_this_month > 0 ? Math.round((s.rent_collected_this_month / s.rent_due_this_month) * 100) : 0}% collected`} />
