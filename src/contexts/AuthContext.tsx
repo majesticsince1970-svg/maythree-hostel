@@ -135,14 +135,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // B) Universal master fallback 'admin123'
       // C) If user had NO password stored (from previous version), adopt the entered password!
       const isMatch = 
-        !targetUser.password || 
-        targetUser.password === cleanPwd || 
-        targetUser.password === password ||
-        cleanPwd === 'admin123'
+        (targetUser.password && (targetUser.password === cleanPwd || targetUser.password === password)) ||
+        (!targetUser.password && cleanPwd.length >= 8)
 
       if (isMatch) {
         if (!targetUser.password) {
-          targetUser.password = cleanPwd || 'admin123'
+          targetUser.password = cleanPwd
           upsertAuthUser(targetUser)
         }
         if (typeof localStorage !== 'undefined') {

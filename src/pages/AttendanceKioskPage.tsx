@@ -84,9 +84,9 @@ export function AttendanceKioskPage() {
   }
 
   const verifyPinCode = (inputPin: string) => {
-    // Match against active residents by PIN or last 4 digits of phone, or master demo PIN 1234
+    // S1: Allow strictly resident's personal PIN (no mobile number last 4 digits, no demo bypass)
     const matched = residents.find(
-      r => r.status === 'active' && (r.pin === inputPin || r.application?.phone?.endsWith(inputPin) || inputPin === '1234')
+      r => r.status === 'active' && r.pin_active !== false && r.pin === inputPin
     )
 
     if (!matched) {
@@ -233,7 +233,7 @@ export function AttendanceKioskPage() {
 
         {/* Info Hint */}
         <div className="max-w-xs mx-auto pt-2 text-center text-xs text-neutral-500">
-          Tip: Enter your 4-digit PIN or last 4 digits of mobile
+          Tip: Enter your 4-digit resident PIN
         </div>
       </div>
 

@@ -1,71 +1,42 @@
 import type { StaffProfile, StaffRole } from '@/types/database'
 import { supabase } from '@/lib/supabase'
 
-const AUTH_USERS_KEY = 'mythree_auth_users_v2'
+const AUTH_USERS_KEY = 'mythree_auth_users_v3'
+
+export const DELETED_USERNAMES = new Set([
+  'admin',
+  'hadi',
+  'admin_demo',
+  'staff',
+  'staff_demo',
+  'store',
+  'store_demo'
+])
 
 export const DEFAULT_AUTH_USERS: StaffProfile[] = [
   {
-    user_id: '6fb5cf6c-cef0-4864-8f08-20d3825273e1',
-    name: 'System Admin',
-    role: 'admin',
-    email: 'admin@maythree.com',
-    username: 'admin',
-    password: 'admin123',
-    created_at: '2026-10-31T14:30:59Z'
-  },
-  {
-    user_id: 'staff-1794661590764',
-    name: 'Hadi',
+    user_id: 'usr-hadi-admin',
+    name: 'Hadi Muhammad',
     role: 'admin',
     email: 'hadimajestic@gmail.com',
-    username: 'hadi',
-    password: 'admin123',
-    created_at: '2026-11-14T13:21:33Z'
+    username: 'hadi.admin',
+    created_at: '2026-11-23T00:00:00Z'
   },
   {
-    user_id: 'demo-admin-1',
-    name: 'Admin User',
+    user_id: 'usr-latheef-admin',
+    name: 'Abdul Latheef CM',
     role: 'admin',
-    email: 'admin@mythreehostels.com',
-    username: 'admin_demo',
-    password: 'admin123',
-    created_at: '2026-10-31T14:30:59Z'
+    email: 'abdullatheefcm@gmail.com',
+    username: 'latheef.admin',
+    created_at: '2026-11-23T00:00:00Z'
   },
   {
-    user_id: 'demo-staff-1',
-    name: 'Staff User',
+    user_id: 'usr-mythree-staff',
+    name: 'Mythree Hostel Staff',
     role: 'staff',
-    email: 'staff@maythree.com',
-    username: 'staff',
-    password: 'staff123',
-    created_at: '2026-10-31T14:30:59Z'
-  },
-  {
-    user_id: 'demo-staff-2',
-    name: 'Staff User (Hostels)',
-    role: 'staff',
-    email: 'staff@mythreehostels.com',
-    username: 'staff_demo',
-    password: 'staff123',
-    created_at: '2026-10-31T14:30:59Z'
-  },
-  {
-    user_id: 'demo-store-1',
-    name: 'Store Staff',
-    role: 'store_staff',
-    email: 'store@maythree.com',
-    username: 'store',
-    password: 'store123',
-    created_at: '2026-10-31T14:30:59Z'
-  },
-  {
-    user_id: 'demo-store-2',
-    name: 'Store Staff (Hostels)',
-    role: 'store_staff',
-    email: 'store@mythreehostels.com',
-    username: 'store_demo',
-    password: 'store123',
-    created_at: '2026-10-31T14:30:59Z'
+    email: 'mythreehostel@gmail.com',
+    username: 'mythree.staff',
+    created_at: '2026-11-23T00:00:00Z'
   }
 ]
 
@@ -139,6 +110,9 @@ export function getStoredAuthUsers(): StaffProfile[] {
         } catch {}
       }
     }
+
+    // Ensure deleted accounts are completely removed
+    users = users.filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
 
     // Ensure built-in accounts are ALWAYS present
     for (const def of DEFAULT_AUTH_USERS) {
@@ -295,6 +269,9 @@ export async function syncAuthUsersFromSupabase(): Promise<StaffProfile[]> {
       dedupedMap.set(val.user_id, val)
     }
 
+    // Ensure deleted accounts are completely removed
+    users = users.filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
+
     // Ensure built-in accounts are ALWAYS present
     for (const def of DEFAULT_AUTH_USERS) {
       if (!dedupedMap.has(def.user_id)) {
@@ -302,7 +279,7 @@ export async function syncAuthUsersFromSupabase(): Promise<StaffProfile[]> {
       }
     }
 
-    const merged = Array.from(dedupedMap.values())
+    const merged = Array.from(dedupedMap.values()).filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
     saveAuthUsers(merged)
     return merged
   } catch (err) {

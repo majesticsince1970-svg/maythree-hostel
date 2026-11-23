@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/ui/loading'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Resident, ResidentStatus } from '@/types/database'
-import { Search, Eye, Phone, BedDouble, User, CalendarX, KeyRound, UserMinus } from 'lucide-react'
+import { Search, Eye, EyeOff, Phone, BedDouble, User, CalendarX, KeyRound, UserMinus } from 'lucide-react'
 
 type FilterTab = 'all' | 'active' | 'checked_out'
 
@@ -38,6 +38,7 @@ export function ResidentsPage() {
   const { addToast } = useToast()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Resident | null>(null)
+  const [showPin, setShowPin] = useState(false)
   const [tab, setTab] = useState<FilterTab>('all')
 
   const tabFiltered = residents.filter((r) => {
@@ -224,16 +225,31 @@ export function ResidentsPage() {
                 <div><p className="text-muted-foreground">Check-in</p><p className="font-medium">{formatDate(selected.check_in_date)}</p></div>
                 <div><p className="text-muted-foreground">Monthly Rent</p><p className="font-medium">{formatCurrency(selected.monthly_rent)}</p></div>
                 <div><p className="text-muted-foreground">Deposit</p><p className="font-medium">{formatCurrency(selected.deposit_amount)}</p></div>
-                <div>
-                  <p className="text-muted-foreground">Entrance PIN</p>
-                  <p className="font-mono font-bold text-primary flex items-center gap-1.5">
-                    <KeyRound className="h-3.5 w-3.5" />
-                    {selected.pin || '1021'}
-                    {selected.pin_active === false && (
-                      <Badge variant="destructive" className="text-[9px] px-1 py-0">Deactivated</Badge>
-                    )}
-                  </p>
-                </div>
+                {/* S2: Mask entrance PIN behind Show tap, and hide for non-admin roles */}
+                {isAdmin && (
+                  <div>
+                    <p className="text-muted-foreground">Entrance PIN</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="font-mono font-bold text-primary flex items-center gap-1.5">
+                        <KeyRound className="h-3.5 w-3.5" />
+                        {showPin ? (selected.pin || '1021') : '••••'}
+                        {selected.pin_active === false && (
+                          <Badge variant="destructive" className="text-[9px] px-1 py-0">Deactivated</Badge>
+                        )}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        onClick={() => setShowPin(!showPin)}
+                      >
+                        {showPin ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        {showPin ? 'Hide' : 'Show'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {(selected.status === 'checked_out' || selected.status === 'vacated') && selected.check_out_date && (
                   <div>
                     <p className="text-muted-foreground">Check-out</p>

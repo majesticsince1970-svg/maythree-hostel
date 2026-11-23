@@ -190,9 +190,11 @@ export function CashPage() {
               <ArrowUpCircle className="h-4 w-4 mr-1.5" /> Top-up
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowCount(true)}>
-            <ClipboardCheck className="h-4 w-4 mr-1.5" /> Physical Count
-          </Button>
+          {isAdmin && (
+            <Button size="sm" onClick={() => setShowCount(true)}>
+              <ClipboardCheck className="h-4 w-4 mr-1.5" /> Physical Count
+            </Button>
+          )}
         </div>
       </div>
 

@@ -281,8 +281,8 @@ export function ExpensesPage() {
               <Label>Paid From *</Label>
               <select {...form.register('paid_from')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
                 <option value="petty_cash">Petty Cash Vault</option>
-                <option value="bank">Hostel Bank Account</option>
-                <option value="upi">Hostel UPI Account</option>
+                {isAdmin && <option value="bank">Hostel Bank Account</option>}
+                {isAdmin && <option value="upi">Hostel UPI Account</option>}
               </select>
             </div>
           </div>
