@@ -177,7 +177,7 @@ export function LoginPage() {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@maythree.com or username"
+                placeholder="Enter username or email"
                 className="mt-1 text-xs h-9"
                 autoComplete="username"
                 autoCapitalize="none"
