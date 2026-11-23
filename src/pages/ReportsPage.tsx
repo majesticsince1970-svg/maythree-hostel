@@ -257,8 +257,8 @@ export function ReportsPage() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Monthly Profit & Loss Statement ({selectedMonth})
             </span>
-            <Badge variant={grossProfit >= 0 ? 'success' : 'destructive'} className="text-xs px-2.5 py-0.5">
-              {grossProfit >= 0 ? 'Operating Surplus' : 'Operating Deficit'}
+            <Badge variant={grossProfit > 0 ? 'success' : grossProfit < 0 ? 'destructive' : 'secondary'} className="text-xs px-2.5 py-0.5">
+              {grossProfit > 0 ? 'Operating Surplus' : grossProfit < 0 ? 'Operating Deficit' : 'No activity'}
             </Badge>
           </CardTitle>
         </CardHeader>

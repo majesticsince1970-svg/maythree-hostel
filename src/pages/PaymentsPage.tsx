@@ -28,7 +28,7 @@ import type { Payment } from '@/types/database'
 const paymentSchema = z.object({
   resident_id: z.string().min(1, 'Select a resident'),
   period_month: z.string().min(1, 'Select month'),
-  amount: z.number().min(1, 'Enter a valid amount'),
+  amount: z.number().min(1, 'Rent payment amount must be greater than ₹0'),
   mode: z.enum(['cash', 'UPI', 'bank']),
   reference: z.string().optional(),
 })
@@ -79,6 +79,22 @@ export function PaymentsPage() {
   })
 
   const watchMode = form.watch('mode')
+  const watchResidentId = form.watch('resident_id')
+  const watchPeriodMonth = form.watch('period_month')
+
+  // L11: Auto pre-fill rent payment amount with resident's balance due for the selected month
+  useEffect(() => {
+    if (watchResidentId && watchPeriodMonth) {
+      const res = residents.find(r => r.id === watchResidentId)
+      if (res) {
+        const monthPaid = payments
+          .filter(p => p.resident_id === watchResidentId && p.period_month === watchPeriodMonth)
+          .reduce((sum, p) => sum + p.amount, 0)
+        const balanceDue = Math.max(0, res.monthly_rent - monthPaid)
+        form.setValue('amount', balanceDue)
+      }
+    }
+  }, [watchResidentId, watchPeriodMonth, residents, payments, form])
 
   // Total metrics
   const bankTotal = useMemo(() =>
@@ -143,6 +159,16 @@ export function PaymentsPage() {
   }, [sales, search])
 
   const handleRecord = (data: PaymentFormData) => {
+    // L12: Block ₹0 payments and show message
+    if (!data.amount || data.amount <= 0) {
+      addToast({
+        type: 'error',
+        title: 'Payment Blocked',
+        description: 'Rent payment amount must be greater than ₹0.'
+      })
+      return
+    }
+
     const payment = addPayment({
       resident_id: data.resident_id,
       period_month: data.period_month,
@@ -485,6 +511,9 @@ export function PaymentsPage() {
                 className="mt-1"
                 placeholder="e.g. 8000"
               />
+              {form.formState.errors.amount && (
+                <p className="text-xs text-destructive mt-1">{form.formState.errors.amount.message}</p>
+              )}
             </div>
           </div>
 

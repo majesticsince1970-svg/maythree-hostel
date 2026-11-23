@@ -220,51 +220,53 @@ export function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Beds/Room</TableHead>
-                    <TableHead>Rent/Head</TableHead>
-                    <TableHead>Attached Toilet</TableHead>
-                    <TableHead>Rooms</TableHead>
-                    <TableHead>Total Beds</TableHead>
-                    <TableHead>Occupied</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {roomTypes.map(rt => {
-                    const rtRooms = rooms.filter(r => r.room_type_id === rt.id)
-                    const rtBeds = beds.filter(b => rtRooms.some(r => r.id === b.room_id))
-                    const occupiedBeds = rtBeds.filter(b => b.status === 'occupied').length
-                    return (
-                      <TableRow key={rt.id}>
-                        <TableCell className="font-medium">{rt.name}</TableCell>
-                        <TableCell>{rt.beds_per_room}</TableCell>
-                        <TableCell className="font-semibold">{formatCurrency(rt.rent_per_head)}</TableCell>
-                        <TableCell>{rt.has_attached_toilet ? '✅' : '❌'}</TableCell>
-                        <TableCell>{rtRooms.length}</TableCell>
-                        <TableCell>{rtBeds.length}</TableCell>
-                        <TableCell>
-                          <Badge variant={occupiedBeds === rtBeds.length ? 'destructive' : 'outline'}>
-                            {occupiedBeds}/{rtBeds.length}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => {
-                            setEditRentTypeId(rt.id)
-                            setEditRentValue(String(rt.rent_per_head))
-                            setEditRentDialog(true)
-                          }}>
-                            <Edit className="h-4 w-4 mr-1" /> Edit Rent
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Beds/Room</TableHead>
+                      <TableHead>Rent/Head</TableHead>
+                      <TableHead>Attached Toilet</TableHead>
+                      <TableHead>Rooms</TableHead>
+                      <TableHead>Total Beds</TableHead>
+                      <TableHead>Occupied</TableHead>
+                      <TableHead className="min-w-[120px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {roomTypes.map(rt => {
+                      const rtRooms = rooms.filter(r => r.room_type_id === rt.id)
+                      const rtBeds = beds.filter(b => rtRooms.some(r => r.id === b.room_id))
+                      const occupiedBeds = rtBeds.filter(b => b.status === 'occupied').length
+                      return (
+                        <TableRow key={rt.id}>
+                          <TableCell className="font-medium whitespace-nowrap">{rt.name}</TableCell>
+                          <TableCell>{rt.beds_per_room}</TableCell>
+                          <TableCell className="font-semibold whitespace-nowrap">{formatCurrency(rt.rent_per_head)}</TableCell>
+                          <TableCell>{rt.has_attached_toilet ? '✅' : '❌'}</TableCell>
+                          <TableCell>{rtRooms.length}</TableCell>
+                          <TableCell>{rtBeds.length}</TableCell>
+                          <TableCell>
+                            <Badge variant={occupiedBeds === rtBeds.length && rtBeds.length > 0 ? 'destructive' : 'outline'}>
+                              {occupiedBeds}/{rtBeds.length}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              setEditRentTypeId(rt.id)
+                              setEditRentValue(String(rt.rent_per_head))
+                              setEditRentDialog(true)
+                            }}>
+                              <Edit className="h-4 w-4 mr-1" /> Edit Rent
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
               <div className="mt-4 p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm"><strong>Total:</strong> {rooms.length} rooms · {beds.length} beds · Full occupancy: {formatCurrency(beds.reduce((s, bed) => {
                   const room = rooms.find(r => r.id === bed.room_id)

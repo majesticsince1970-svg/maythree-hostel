@@ -201,11 +201,6 @@ export function Layout() {
                           {pendingVerificationCount}
                         </Badge>
                       )}
-                      {module.subItems && (
-                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md", active ? "bg-primary-foreground/20 text-primary-foreground" : "text-muted-foreground/60")}>
-                          {module.subItems.length}
-                        </span>
-                      )}
                     </div>
                   </Link>
 

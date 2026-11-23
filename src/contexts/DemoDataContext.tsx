@@ -118,9 +118,9 @@ const initStockMovements: StockMovement[] = []
 
 // ── Staff ──
 const initStaff: StaffProfile[] = [
-  { user_id: 'demo-admin-1', name: 'Admin User', role: 'admin', email: 'admin@mythreehostels.com' },
-  { user_id: 'demo-staff-1', name: 'Staff User', role: 'staff', email: 'staff@mythreehostels.com' },
-  { user_id: 'demo-store-1', name: 'Store Staff', role: 'store_staff', email: 'store@mythreehostels.com' },
+  { user_id: 'usr-hadi-admin', name: 'Hadi Muhammad', role: 'admin', email: 'hadimajestic@gmail.com', username: 'hadi.admin' },
+  { user_id: 'usr-latheef-admin', name: 'Abdul Latheef CM', role: 'admin', email: 'abdullatheefcm@gmail.com', username: 'latheef.admin' },
+  { user_id: 'usr-mythree-staff', name: 'Mythree Hostel Staff', role: 'staff', email: 'mythreehostel@gmail.com', username: 'mythree.staff' },
 ]
 
 // Helper to safely read from localStorage
@@ -173,7 +173,13 @@ interface DemoDataContextType {
   // Attendance
   attendanceLogs: AttendanceMovement[]
   attendanceStats: { totalResidents: number; insideHostel: number; outsideHostel: number }
-  recordAttendanceMovement: (residentId: string, direction: 'IN' | 'OUT', note?: string, recordedBy?: string) => AttendanceMovement
+  recordAttendanceMovement: (
+    residentId: string,
+    direction: 'IN' | 'OUT',
+    note?: string,
+    recordedBy?: string,
+    options?: { residentName?: string; roomNo?: string; bedLabel?: string }
+  ) => AttendanceMovement
   getResidentAttendanceStatus: (residentId: string) => { status: 'IN' | 'OUT'; lastTime: string; note?: string }
   // Computed
   dashboardStats: DashboardStats
@@ -209,6 +215,7 @@ interface DemoDataContextType {
   // Store
   addProduct: (product: Omit<Product, 'id'>) => Product
   updateProduct: (id: string, changes: Partial<Product>) => void
+  addVendor: (vendor: { name: string; phone?: string }) => Vendor
   recordSale: (items: { productId: string; qty: number; unitPrice: number }[], paymentMode: SalePaymentMode, residentId?: string | null) => Sale
   recordPurchase: (vendorId: string | null, invoiceNo: string, paidFrom: string, items: { productId: string; qty: number; unitCost: number }[]) => StockPurchase
   recordStockAdjustment: (productId: string, countedQty: number, reason: string) => void
@@ -254,7 +261,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [acRoomsState, setAcRooms] = useState<Set<string>>(
     stored?.acRooms ? new Set(stored.acRooms) : acRoomIds
   )
-  const [vendors] = useState<Vendor[]>(initVendors)
+  const [vendors, setVendors] = useState<Vendor[]>(stored?.vendors || initVendors)
 
   // ── Sync to localStorage on every change ──
   useEffect(() => {
@@ -280,6 +287,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         checkoutRentRule,
         attendanceLogs,
         acRooms: Array.from(acRoomsState),
+        vendors,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
     } catch (err) {
@@ -525,13 +533,14 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     residentId: string,
     direction: 'IN' | 'OUT',
     note?: string,
-    recordedBy?: string
+    recordedBy?: string,
+    options?: { residentName?: string; roomNo?: string; bedLabel?: string }
   ): AttendanceMovement => {
     const res = residents.find(r => r.id === residentId)
     const room = rooms.find(rm => rm.id === res?.bed?.room_id)
-    const roomNo = room?.room_no || res?.bed?.room?.room_no || '—'
-    const bedLabel = res?.bed?.bed_label || 'A'
-    const resName = res?.application?.full_name || 'Resident'
+    const roomNo = options?.roomNo || room?.room_no || res?.bed?.room?.room_no || '—'
+    const bedLabel = options?.bedLabel || res?.bed?.bed_label || 'A'
+    const resName = options?.residentName || res?.application?.full_name || 'Resident'
     // M9: Display all dates and times in Asia/Kolkata
     const nowTime = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -896,12 +905,17 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     // Add resident
     setResidents(prev => [newResident, ...prev])
 
-    // Record new admission in attendance
+    // Record new admission in attendance (L10: show resident name and room)
     recordAttendanceMovement(
       newResident.id,
       'IN',
       `Newly admitted resident check-in (Room ${room?.room_no || '—'} · Bed ${bed.bed_label})`,
-      'Staff User'
+      'Staff User',
+      {
+        residentName: app.full_name,
+        roomNo: room?.room_no || '—',
+        bedLabel: bed.bed_label
+      }
     )
 
     // Update application status
@@ -1342,6 +1356,18 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [cashAccounts])
 
+  // L14: Simple vendor management
+  const addVendor = useCallback((vendorData: { name: string; phone?: string }): Vendor => {
+    const newV: Vendor = {
+      id: `ven-${Date.now()}`,
+      name: vendorData.name,
+      phone: vendorData.phone || null,
+      default_category_id: null,
+    }
+    setVendors(prev => [...prev, newV])
+    return newV
+  }, [])
+
   // ── Store: Products ──
   const addProduct = useCallback((product: Omit<Product, 'id'>): Product => {
     const newProduct: Product = { ...product, id: `prod-${Date.now()}` }
@@ -1478,7 +1504,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const purchase: StockPurchase = {
       id: purchaseId, purchase_date: purchaseDate, vendor_id: vendorId,
       invoice_no: invoiceNo, paid_from: paidFrom, items: purchaseItems,
-      vendor: initVendors.find(v => v.id === vendorId),
+      vendor: vendors.find(v => v.id === vendorId),
     }
 
     setStockPurchases(prev => [purchase, ...prev])
@@ -1688,6 +1714,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       recordCashCount,
       addProduct,
       updateProduct,
+      addVendor,
       recordSale,
       recordPurchase,
       recordStockAdjustment,

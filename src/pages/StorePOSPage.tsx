@@ -186,7 +186,9 @@ export function StorePOSPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Hostel special thermal tumbler · Price: <span className="font-bold text-foreground">{formatCurrency(magicTumbler.selling_price)}</span> ·
-                  <span className="ml-1 text-green-700 dark:text-green-400 font-semibold">{magicTumbler.stock_on_hand ?? 25} in stock</span>
+                  <span className={`ml-1 font-semibold ${(magicTumbler.stock_on_hand ?? 0) === 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-green-700 dark:text-green-400'}`}>
+                    {magicTumbler.stock_on_hand ?? 0} in stock
+                  </span>
                 </p>
               </div>
             </div>
@@ -228,11 +230,16 @@ export function StorePOSPage() {
                     return (
                       <button
                         key={product.id}
-                        onClick={() => addToCart(product)}
-                        disabled={isOutOfStock}
+                        onClick={() => {
+                          if (isOutOfStock) {
+                            addToast({ type: 'error', title: 'Out of Stock', description: `${product.name} is currently out of stock.` })
+                          } else {
+                            addToCart(product)
+                          }
+                        }}
                         className={`p-3 border rounded-xl text-left transition-all ${
                           isOutOfStock
-                            ? 'opacity-50 cursor-not-allowed bg-muted/40 border-muted'
+                            ? 'opacity-60 bg-muted/40 border-muted hover:border-destructive/40'
                             : 'hover:border-primary hover:bg-primary/5 hover:shadow-sm bg-card'
                         }`}
                       >

@@ -44,7 +44,8 @@ export function RoomsPage() {
   const getBedsForRoom = (roomId: string) => {
     let roomBeds = beds.filter(b => b.room_id === roomId)
     if (filter !== 'all') roomBeds = roomBeds.filter(b => b.status === filter)
-    return roomBeds
+    // L2: Sort beds alphabetically: A, B, C, D
+    return roomBeds.sort((a, b) => a.bed_label.localeCompare(b.bed_label))
   }
 
   const total = beds.length
@@ -70,36 +71,49 @@ export function RoomsPage() {
     setSelectedBed(null)
   }
 
-  const renderBedGrid = (roomsList: typeof rooms) => (
-    <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-2">
-      {roomsList.map((room) => {
-        const roomIsAC = acRooms.has(room.id)
-        return (
-          <div key={room.id} className="space-y-1">
-            <p className="text-xs font-semibold text-center text-muted-foreground flex items-center justify-center gap-0.5">
-              {room.room_no}
-              {roomIsAC && <Snowflake className="h-3 w-3 text-blue-500" />}
-            </p>
-            <div className="flex gap-1 justify-center">
-              {getBedsForRoom(room.id).map((bed) => (
-                <button
-                  key={bed.id}
-                  onClick={() => setSelectedBed(bed)}
-                  className={cn(
-                    "w-8 h-8 rounded text-xs font-bold border transition-colors",
-                    statusColors[bed.status]
-                  )}
-                  title={`Room ${room.room_no} · Bed ${bed.bed_label} · ${bed.status}`}
-                >
-                  {bed.bed_label}
-                </button>
-              ))}
+  const renderBedGrid = (roomsList: typeof rooms) => {
+    const visibleRooms = roomsList.filter(room => getBedsForRoom(room.id).length > 0)
+
+    // L3: Show "No beds match" when filter produces no matching beds
+    if (visibleRooms.length === 0) {
+      return (
+        <p className="text-center text-xs text-muted-foreground py-6">
+          No beds match the &ldquo;{filter}&rdquo; filter in this section.
+        </p>
+      )
+    }
+
+    return (
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-2">
+        {visibleRooms.map((room) => {
+          const roomIsAC = acRooms.has(room.id)
+          return (
+            <div key={room.id} className="space-y-1">
+              <p className="text-xs font-semibold text-center text-muted-foreground flex items-center justify-center gap-0.5">
+                {room.room_no}
+                {roomIsAC && <Snowflake className="h-3 w-3 text-blue-500" />}
+              </p>
+              <div className="flex gap-1 justify-center">
+                {getBedsForRoom(room.id).map((bed) => (
+                  <button
+                    key={bed.id}
+                    onClick={() => setSelectedBed(bed)}
+                    className={cn(
+                      "w-8 h-8 rounded text-xs font-bold border transition-colors",
+                      statusColors[bed.status]
+                    )}
+                    title={`Room ${room.room_no} · Bed ${bed.bed_label} · ${bed.status}`}
+                  >
+                    {bed.bed_label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )
-      })}
-    </div>
-  )
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -17,7 +17,7 @@ interface PurchaseItem {
 }
 
 export function StorePurchasesPage() {
-  const { products, vendors, stockPurchases, recordPurchase } = useDemoData()
+  const { products, vendors, stockPurchases, recordPurchase, addVendor } = useDemoData()
   const { addToast } = useToast()
   const [showForm, setShowForm] = useState(false)
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0])
@@ -28,6 +28,24 @@ export function StorePurchasesPage() {
   const [selectedProductId, setSelectedProductId] = useState('')
   const [itemQty, setItemQty] = useState('')
   const [itemCost, setItemCost] = useState('')
+
+  // L14: Simple vendor management
+  const [showAddVendor, setShowAddVendor] = useState(false)
+  const [newVendorName, setNewVendorName] = useState('')
+  const [newVendorPhone, setNewVendorPhone] = useState('')
+
+  const handleCreateVendor = () => {
+    if (!newVendorName.trim()) {
+      addToast({ type: 'error', title: 'Vendor name required' })
+      return
+    }
+    const created = addVendor({ name: newVendorName.trim(), phone: newVendorPhone.trim() || undefined })
+    setVendorId(created.id)
+    setShowAddVendor(false)
+    setNewVendorName('')
+    setNewVendorPhone('')
+    addToast({ type: 'success', title: 'Vendor added', description: `${created.name} added to suppliers.` })
+  }
 
   const addItem = () => {
     const product = products.find(p => p.id === selectedProductId)
@@ -80,10 +98,11 @@ export function StorePurchasesPage() {
     .map(p => {
       const itemCount = p.items?.length || 0
       const purchaseTotal = p.items?.reduce((s, i) => s + i.qty * i.unit_cost, 0) || 0
+      const matchedVendor = p.vendor || vendors.find(v => v.id === p.vendor_id)
       return {
         id: p.id,
         date: p.purchase_date,
-        vendor: p.vendor?.name || 'Unknown Vendor',
+        vendor: matchedVendor ? (matchedVendor.phone ? `${matchedVendor.name} (${matchedVendor.phone})` : matchedVendor.name) : 'Unknown Vendor',
         invoice: p.invoice_no || '—',
         items: itemCount,
         total: purchaseTotal,
@@ -149,11 +168,43 @@ export function StorePurchasesPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Vendor</Label>
-              <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
-                <option value="">Select vendor...</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
+              <div className="flex items-center justify-between">
+                <Label>Vendor</Label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddVendor(!showAddVendor)}
+                  className="text-xs text-primary font-semibold hover:underline"
+                >
+                  {showAddVendor ? 'Cancel' : '+ Add Vendor'}
+                </button>
+              </div>
+              {showAddVendor ? (
+                <div className="p-3 border rounded-lg bg-muted/40 space-y-2 mt-1">
+                  <p className="text-xs font-semibold">New Supplier / Vendor</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Vendor Name *"
+                      value={newVendorName}
+                      onChange={e => setNewVendorName(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      placeholder="Phone (optional)"
+                      value={newVendorPhone}
+                      onChange={e => setNewVendorPhone(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <Button type="button" size="sm" className="h-7 text-xs w-full" onClick={handleCreateVendor}>
+                    Save Vendor
+                  </Button>
+                </div>
+              ) : (
+                <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                  <option value="">Select vendor...</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name} {v.phone ? `(${v.phone})` : ''}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <Label>Paid From</Label>
