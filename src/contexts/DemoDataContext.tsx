@@ -1028,8 +1028,6 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const receiptSeq = (checkoutReceipts.length + 1).toString().padStart(4, '0')
     const receiptNo = `CKR-2026-${receiptSeq}`
 
-    const settlementAmt = Math.abs(Number(params.settlementAmount) || 0)
-    const isRefund = params.settlementType === 'refund'
     const advanceStatus = params.advanceStatus || (isRefund ? 'Returned' : 'Adjusted')
 
     // 4. Create departure record
@@ -1530,7 +1528,6 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     setStockMovements(prev => [...movements, ...prev])
 
     // Debit account based on paidFrom
-    const total = items.reduce((s, i) => s + i.qty * i.unitCost, 0)
     if (paidFrom === 'petty_cash') {
       setCashAccounts(prev => prev.map(a => a.id === 'ca-1' ? { ...a, balance: (a.balance || 0) - total } : a))
       setCashTransactions(prev => [{

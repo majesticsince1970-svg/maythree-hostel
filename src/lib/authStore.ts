@@ -111,9 +111,6 @@ export function getStoredAuthUsers(): StaffProfile[] {
       }
     }
 
-    // Ensure deleted accounts are completely removed
-    users = users.filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
-
     // Ensure built-in accounts are ALWAYS present
     for (const def of DEFAULT_AUTH_USERS) {
       const hasDef = users.some(u => 
@@ -268,9 +265,6 @@ export async function syncAuthUsersFromSupabase(): Promise<StaffProfile[]> {
     for (const val of userMap.values()) {
       dedupedMap.set(val.user_id, val)
     }
-
-    // Ensure deleted accounts are completely removed
-    users = users.filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
 
     // Ensure built-in accounts are ALWAYS present
     for (const def of DEFAULT_AUTH_USERS) {
