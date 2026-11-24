@@ -45,7 +45,7 @@ export interface VacateResidentParams {
 }
 
 const DEMO_MODE = false
-const STORAGE_KEY = 'mythree_hostel_state_v9'
+const STORAGE_KEY = 'mythree_hostel_state_v10'
 
 // ── Clean Hostel Data: 169 beds, 0 occupied, 169 vacant, 0 active residents, structure strictly preserved ──
 const seedData = generateCompleteHostelData(seedRoomTypes, false)
@@ -126,11 +126,15 @@ const initStaff: StaffProfile[] = [
 // Helper to safely read from localStorage
 function getStoredState() {
   try {
-    // Clean up legacy demo storage keys if present
+    // Clean up legacy demo storage keys to ensure clean reset applies everywhere
     if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('mythree_hostel_state_v9')
       localStorage.removeItem('mythree_hostel_state_v8')
       localStorage.removeItem('mythree_hostel_state_v7')
       localStorage.removeItem('mythree_hostel_state_v6')
+      localStorage.removeItem('mythree_hostel_state')
+      localStorage.removeItem('mythree_auth_users_v2')
+      localStorage.removeItem('mythree_auth_users')
     }
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null

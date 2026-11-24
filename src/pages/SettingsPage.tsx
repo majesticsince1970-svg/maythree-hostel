@@ -303,7 +303,7 @@ export function SettingsPage() {
                   {pagedRooms.map(room => {
                     const rt = roomTypes.find(r => r.id === room.room_type_id)
                     const roomBeds = beds.filter(b => b.room_id === room.id)
-                    const hasAC = acRooms.has(room.id)
+                    const hasAC = acRooms.has(room.id) || ['217', '218', '219'].includes(room.room_no)
                     return (
                       <TableRow key={room.id}>
                         <TableCell className="font-medium">{room.room_no}</TableCell>
@@ -379,7 +379,7 @@ export function SettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {staffList.map((staff) => (
+                  {staffList.filter(s => !['admin', 'hadi', 'admin_demo', 'staff', 'staff_demo', 'store', 'store_demo'].includes((s.username || '').toLowerCase())).map((staff) => (
                     <TableRow key={staff.user_id}>
                       <TableCell className="font-medium">{staff.name}</TableCell>
                       <TableCell>

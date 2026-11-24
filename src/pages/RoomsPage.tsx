@@ -56,7 +56,7 @@ export function RoomsPage() {
   const bedResident = selectedBed ? residents.find(r => r.bed_id === selectedBed.id && r.status === 'active') : null
   const bedRoom = selectedBed ? rooms.find(r => r.id === selectedBed.room_id) : null
   const bedRoomType = bedRoom ? roomTypes.find(rt => rt.id === bedRoom.room_type_id) : null
-  const bedIsAC = bedRoom ? acRooms.has(bedRoom.id) : false
+  const bedIsAC = bedRoom ? (acRooms.has(bedRoom.id) || ['217', '218', '219'].includes(bedRoom.room_no)) : false
 
   // Derive rent labels from roomTypes
   const twinRoomType = roomTypes.find(rt => rt.id === 'rt-1')
@@ -86,7 +86,7 @@ export function RoomsPage() {
     return (
       <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-2">
         {visibleRooms.map((room) => {
-          const roomIsAC = acRooms.has(room.id)
+          const roomIsAC = acRooms.has(room.id) || ['217', '218', '219'].includes(room.room_no)
           return (
             <div key={room.id} className="space-y-1">
               <p className="text-xs font-semibold text-center text-muted-foreground flex items-center justify-center gap-0.5">
@@ -185,7 +185,7 @@ export function RoomsPage() {
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {flatRooms.map((room) => {
-                const roomIsAC = acRooms.has(room.id)
+                const roomIsAC = acRooms.has(room.id) || ['217', '218', '219'].includes(room.room_no)
                 return (
                   <div key={room.id} className="space-y-1">
                     <p className="text-xs font-semibold text-center text-muted-foreground flex items-center justify-center gap-0.5">

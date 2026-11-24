@@ -65,51 +65,8 @@ export function getStoredAuthUsers(): StaffProfile[] {
       users = [...DEFAULT_AUTH_USERS]
     }
 
-    // Always scan hostel state keys in localStorage to automatically pick up any user ever created in User Management / Settings
-    const stateKeys = [
-      'mythree_hostel_state_v9',
-      'mythree_hostel_state_v8',
-      'mythree_hostel_state_v7',
-      'mythree_hostel_state_v6',
-      'mythree_hostel_state'
-    ]
-
-    for (const key of stateKeys) {
-      const stateRaw = localStorage.getItem(key)
-      if (stateRaw) {
-        try {
-          const parsed = JSON.parse(stateRaw)
-          if (parsed && Array.isArray(parsed.staffList)) {
-            for (const staff of parsed.staffList) {
-              if (!staff || !staff.user_id) continue
-              const cleanEmail = staff.email ? staff.email.trim().toLowerCase() : ''
-              const cleanUsername = staff.username ? staff.username.trim().toLowerCase() : (cleanEmail ? cleanEmail.split('@')[0] : '')
-
-              const existingIdx = users.findIndex(u => 
-                u.user_id === staff.user_id || 
-                (cleanEmail && u.email?.toLowerCase() === cleanEmail) ||
-                (cleanUsername && u.username?.toLowerCase() === cleanUsername)
-              )
-
-              if (existingIdx >= 0) {
-                users[existingIdx] = {
-                  ...users[existingIdx],
-                  ...staff,
-                  username: cleanUsername || users[existingIdx].username,
-                  password: users[existingIdx].password || staff.password || 'admin123'
-                }
-              } else {
-                users.push({
-                  ...staff,
-                  username: cleanUsername || `user_${staff.user_id.slice(-4)}`,
-                  password: staff.password || 'admin123'
-                })
-              }
-            }
-          }
-        } catch {}
-      }
-    }
+    // Filter out any legacy deleted demo users
+    users = users.filter(u => !DELETED_USERNAMES.has((u.username || '').toLowerCase()))
 
     // Ensure built-in accounts are ALWAYS present
     for (const def of DEFAULT_AUTH_USERS) {
@@ -421,5 +378,5 @@ export function syncStaffListWithAuthStore(staffList: StaffProfile[]): StaffProf
     saveAuthUsers(authUsers)
   }
 
-  return syncedList
+  return syncedList.filter(s => !DELETED_USERNAMES.has((s.username || '').toLowerCase()))
 }

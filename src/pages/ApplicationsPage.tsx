@@ -153,7 +153,7 @@ export function ApplicationsPage() {
       .map(b => {
         const room = rooms.find(r => r.id === b.room_id)
         const rt = roomTypes.find(t => t.id === room?.room_type_id)
-        const hasAC = room ? acRooms.has(room.id) : false
+        const hasAC = room ? (acRooms.has(room.id) || ['217', '218', '219'].includes(room.room_no)) : false
         return { bed: b, room, roomType: rt, hasAC }
       })
   }, [selectedRoomTypeId, beds, rooms, roomTypes, acRooms])
