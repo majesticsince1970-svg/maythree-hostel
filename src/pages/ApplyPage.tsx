@@ -125,6 +125,24 @@ export function ApplyPage() {
     defaultValues: emergencyData || { emergency_name: '', emergency_relation: '', emergency_phone: '' },
   })
 
+  type RoomOption = (typeof publicRoomOptions)[number]
+  const roomTypeIdFor = (opt: RoomOption) => roomTypes.find(rt => opt.room_type.includes(rt.name))?.id || ''
+  const selectedRoomTypeId = personalForm.watch('preferred_room_type_id')
+  const selectedAc = personalForm.watch('preferred_ac')
+  const isRoomOptionSelected = (opt: RoomOption) =>
+    selectedRoomTypeId !== '' &&
+    roomTypeIdFor(opt) === selectedRoomTypeId &&
+    (opt.has_ac ? selectedAc === 'yes' : selectedAc !== 'yes')
+  const selectRoomOption = (opt: RoomOption) => {
+    personalForm.setValue('preferred_room_type_id', roomTypeIdFor(opt), { shouldValidate: true })
+    personalForm.setValue('preferred_ac', opt.has_ac ? 'yes' : 'no')
+  }
+  const chosenRoomLabel = personalData
+    ? publicRoomOptions.find(opt =>
+        roomTypeIdFor(opt) === personalData.preferred_room_type_id &&
+        opt.has_ac === (personalData.preferred_ac === 'yes'))?.room_type
+    : undefined
+
   const handleNext = async () => {
     if (step === 1) {
       const valid = await personalForm.trigger()
@@ -276,42 +294,36 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label>Room Preference *</Label>
-                <div className="space-y-2 mt-2">
-                  {publicRoomOptions.map((opt) => (
-                    <label key={opt.room_type} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
-                      personalForm.watch('preferred_room_type_id') === roomTypes.find(rt => opt.room_type.includes(rt.name))?.id
-                        ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          {...personalForm.register('preferred_room_type_id')}
-                          value={roomTypes.find(rt => opt.room_type.includes(rt.name))?.id || ''}
-                          className="text-primary"
-                        />
-                        <div>
-                          <p className="font-medium text-sm">{opt.room_type}</p>
-                          <p className="text-xs text-muted-foreground">{opt.beds_available} beds available</p>
+                {/* Each card is a room type plus AC/non-AC. Twin AC and Twin non-AC share a
+                    room type id, so the card sets both fields and selection compares both. */}
+                <input type="hidden" {...personalForm.register('preferred_room_type_id')} />
+                <input type="hidden" {...personalForm.register('preferred_ac')} />
+                <div className="space-y-2 mt-2" role="radiogroup" aria-label="Room preference">
+                  {publicRoomOptions.map((opt) => {
+                    const selected = isRoomOptionSelected(opt)
+                    return (
+                      <label key={opt.room_type} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selected ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="room_option"
+                            checked={selected}
+                            onChange={() => selectRoomOption(opt)}
+                            className="text-primary"
+                          />
+                          <div>
+                            <p className="font-medium text-sm">{opt.room_type}</p>
+                            <p className="text-xs text-muted-foreground">{opt.beds_available} beds available</p>
+                          </div>
                         </div>
-                      </div>
-                      <p className="font-semibold text-primary">{formatCurrency(opt.rent_per_head)}/mo</p>
-                    </label>
-                  ))}
+                        <p className="font-semibold text-primary">{formatCurrency(opt.rent_per_head)}/mo</p>
+                      </label>
+                    )
+                  })}
                 </div>
                 {personalForm.formState.errors.preferred_room_type_id && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.preferred_room_type_id.message}</p>}
-              </div>
-              <div>
-                <Label>AC Preference</Label>
-                <div className="flex gap-3 mt-2">
-                  {(['any', 'yes', 'no'] as const).map((v) => (
-                    <label key={v} className={`flex-1 text-center p-2 border rounded-lg cursor-pointer text-sm ${
-                      personalForm.watch('preferred_ac') === v ? 'border-primary bg-primary/5 font-medium' : ''
-                    }`}>
-                      <input type="radio" {...personalForm.register('preferred_ac')} value={v} className="sr-only" />
-                      {v === 'any' ? 'No preference' : v === 'yes' ? 'AC' : 'Non-AC'}
-                    </label>
-                  ))}
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -454,6 +466,7 @@ export function ApplyPage() {
                   <p className="text-muted-foreground">DOB</p><p className="font-medium">{personalData.dob}</p>
                   <p className="text-muted-foreground">Phone</p><p className="font-medium">{personalData.phone}</p>
                   {personalData.email && <><p className="text-muted-foreground">Email</p><p className="font-medium">{personalData.email}</p></>}
+                  <p className="text-muted-foreground">Room</p><p className="font-medium">{chosenRoomLabel || '—'}</p>
                 </div>
                 <h4 className="font-semibold text-primary">Address & Occupation</h4>
                 <div className="grid grid-cols-2 gap-2 bg-muted/50 p-3 rounded-lg">
