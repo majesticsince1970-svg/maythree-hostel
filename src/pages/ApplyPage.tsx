@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,29 +11,28 @@ import { useDemoData } from '@/contexts/DemoDataContext'
 import { formatCurrency } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
+import { newApplicationSubmission } from '@/lib/applicationRef'
+import { fileExtension, MAX_DOCUMENT_BYTES, type ApplicationUpload } from '@/lib/applicationDocuments'
+import type { DocumentKind } from '@/types/database'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2, AlertTriangle } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 
-async function fileToDataUri(file: File): Promise<string> {
-  let fileToRead = file
+/** Compresses photos (to keep uploads small on mobile data) and prepares a file for upload. */
+async function prepareUpload(kind: DocumentKind, file: File): Promise<ApplicationUpload> {
+  let fileToUpload: Blob = file
   if (file.type.startsWith('image/')) {
     try {
-      fileToRead = await imageCompression(file, {
+      fileToUpload = await imageCompression(file, {
         maxSizeMB: 0.15,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
       })
     } catch {
-      fileToRead = file
+      fileToUpload = file
     }
   }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(fileToRead)
-  })
+  return { kind, file: fileToUpload, extension: fileExtension(fileToUpload, file.name) }
 }
 
 const personalSchema = z.object({
@@ -107,6 +106,12 @@ export function ApplyPage() {
   const [documents, setDocuments] = useState<{ photo?: File; id_proof?: File; certificate?: File }>({})
   const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Inline messages instead of alert()/confirm(), which freeze some in-app browsers.
+  const [stepError, setStepError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [samePhoneAcknowledged, setSamePhoneAcknowledged] = useState<string | null>(null)
+  // One id + reference per form session, so a retry can't create a duplicate application.
+  const submissionRef = useRef(newApplicationSubmission())
   const { publicRoomOptions, addApplication, roomTypes } = useDemoData()
   const navigate = useNavigate()
 
@@ -125,6 +130,24 @@ export function ApplyPage() {
     defaultValues: emergencyData || { emergency_name: '', emergency_relation: '', emergency_phone: '' },
   })
 
+  type RoomOption = (typeof publicRoomOptions)[number]
+  const roomTypeIdFor = (opt: RoomOption) => roomTypes.find(rt => opt.room_type.includes(rt.name))?.id || ''
+  const selectedRoomTypeId = personalForm.watch('preferred_room_type_id')
+  const selectedAc = personalForm.watch('preferred_ac')
+  const isRoomOptionSelected = (opt: RoomOption) =>
+    selectedRoomTypeId !== '' &&
+    roomTypeIdFor(opt) === selectedRoomTypeId &&
+    (opt.has_ac ? selectedAc === 'yes' : selectedAc !== 'yes')
+  const selectRoomOption = (opt: RoomOption) => {
+    personalForm.setValue('preferred_room_type_id', roomTypeIdFor(opt), { shouldValidate: true })
+    personalForm.setValue('preferred_ac', opt.has_ac ? 'yes' : 'no')
+  }
+  const chosenRoomLabel = personalData
+    ? publicRoomOptions.find(opt =>
+        roomTypeIdFor(opt) === personalData.preferred_room_type_id &&
+        opt.has_ac === (personalData.preferred_ac === 'yes'))?.room_type
+    : undefined
+
   const handleNext = async () => {
     if (step === 1) {
       const valid = await personalForm.trigger()
@@ -136,11 +159,10 @@ export function ApplyPage() {
       const valid = await emergencyForm.trigger()
       if (valid) {
         const emValues = emergencyForm.getValues()
-        // L7: Warn if emergency phone equals applicant phone
-        if (personalData && emValues.emergency_phone === personalData.phone) {
-          if (!window.confirm('Warning: Emergency contact phone number is identical to the applicant mobile number. Are you sure you want to proceed with this?')) {
-            return
-          }
+        // L7: Warn if emergency phone equals applicant phone; a second tap on Next continues
+        if (personalData && emValues.emergency_phone === personalData.phone && samePhoneAcknowledged !== emValues.emergency_phone) {
+          setSamePhoneAcknowledged(emValues.emergency_phone)
+          return
         }
         setEmergencyData(emValues)
         setStep(4)
@@ -152,9 +174,10 @@ export function ApplyPage() {
       if (!documents.id_proof) missingUploads.push('ID Proof Document')
       
       if (missingUploads.length > 0) {
-        alert(`Please upload the following required documents before proceeding:\n• ${missingUploads.join('\n• ')}`)
+        setStepError(`Please upload: ${missingUploads.join(', ')}.`)
         return
       }
+      setStepError('')
       setStep(5)
     }
   }
@@ -162,23 +185,14 @@ export function ApplyPage() {
   const handleSubmit = async () => {
     if (!personalData || !addressData || !emergencyData || !agreed) return
     setSubmitting(true)
+    setSubmitError('')
     try {
-      const docPayloads: Array<{ kind: 'photo' | 'id_proof' | 'certificate' | 'other'; storage_path: string; verified: boolean }> = []
+      const uploads: ApplicationUpload[] = []
+      if (documents.photo) uploads.push(await prepareUpload('photo', documents.photo))
+      if (documents.id_proof) uploads.push(await prepareUpload('id_proof', documents.id_proof))
+      if (documents.certificate) uploads.push(await prepareUpload('certificate', documents.certificate))
 
-      if (documents.photo) {
-        const photoUri = await fileToDataUri(documents.photo)
-        docPayloads.push({ kind: 'photo', storage_path: photoUri, verified: false })
-      }
-      if (documents.id_proof) {
-        const idUri = await fileToDataUri(documents.id_proof)
-        docPayloads.push({ kind: 'id_proof', storage_path: idUri, verified: false })
-      }
-      if (documents.certificate) {
-        const certUri = await fileToDataUri(documents.certificate)
-        docPayloads.push({ kind: 'certificate', storage_path: certUri, verified: false })
-      }
-
-      const app = await addApplication({
+      const { application, documentsSaved } = await addApplication({
         full_name: personalData.full_name,
         dob: personalData.dob,
         phone: personalData.phone,
@@ -193,20 +207,21 @@ export function ApplyPage() {
         emergency_phone: emergencyData.emergency_phone,
         preferred_room_type_id: personalData.preferred_room_type_id,
         preferred_ac: personalData.preferred_ac,
-        documents: docPayloads as any,
         preferred_room_type: roomTypes.find(rt => rt.id === personalData.preferred_room_type_id),
-      })
+      }, submissionRef.current, uploads)
+      submissionRef.current = { ...submissionRef.current, refNo: application.ref_no }
       navigate('/apply/done', {
         state: {
-          refNo: app.ref_no,
+          refNo: application.ref_no,
           name: personalData.full_name,
           phone: personalData.phone,
-          status: 'submitted'
+          status: 'submitted',
+          documentsSaved
         }
       })
     } catch (err) {
       console.error('[PublicAdmission] Form submission failed:', err)
-      alert('Something went wrong submitting your application. Please check your connection and try again.')
+      setSubmitError(`Your application was not sent. Check your internet connection and tap Submit again. If it keeps failing, call the hostel office on ${BRAND.contacts.phoneFormatted}.`)
     } finally {
       setSubmitting(false)
     }
@@ -256,7 +271,7 @@ export function ApplyPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="full_name">Full Name *</Label>
-                <Input id="full_name" {...personalForm.register('full_name')} placeholder="Enter your full name" className="mt-1" />
+                <Input id="full_name" autoComplete="name" {...personalForm.register('full_name')} placeholder="Enter your full name" className="mt-1" />
                 {personalForm.formState.errors.full_name && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.full_name.message}</p>}
               </div>
               <div>
@@ -266,52 +281,46 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="phone">Mobile Number *</Label>
-                <Input id="phone" {...personalForm.register('phone')} placeholder="10-digit mobile number" className="mt-1" />
+                <Input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} {...personalForm.register('phone')} placeholder="10-digit mobile number" className="mt-1" />
                 {personalForm.formState.errors.phone && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.phone.message}</p>}
               </div>
               <div>
                 <Label htmlFor="email">Email (optional)</Label>
-                <Input id="email" type="email" {...personalForm.register('email')} placeholder="your@email.com" className="mt-1" />
+                <Input id="email" type="email" autoComplete="email" {...personalForm.register('email')} placeholder="your@email.com" className="mt-1" />
                 {personalForm.formState.errors.email && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.email.message}</p>}
               </div>
               <div>
                 <Label>Room Preference *</Label>
-                <div className="space-y-2 mt-2">
-                  {publicRoomOptions.map((opt) => (
-                    <label key={opt.room_type} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
-                      personalForm.watch('preferred_room_type_id') === roomTypes.find(rt => opt.room_type.includes(rt.name))?.id
-                        ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          {...personalForm.register('preferred_room_type_id')}
-                          value={roomTypes.find(rt => opt.room_type.includes(rt.name))?.id || ''}
-                          className="text-primary"
-                        />
-                        <div>
-                          <p className="font-medium text-sm">{opt.room_type}</p>
-                          <p className="text-xs text-muted-foreground">{opt.beds_available} beds available</p>
+                {/* Each card is a room type plus AC/non-AC. Twin AC and Twin non-AC share a
+                    room type id, so the card sets both fields and selection compares both. */}
+                <input type="hidden" {...personalForm.register('preferred_room_type_id')} />
+                <input type="hidden" {...personalForm.register('preferred_ac')} />
+                <div className="space-y-2 mt-2" role="radiogroup" aria-label="Room preference">
+                  {publicRoomOptions.map((opt) => {
+                    const selected = isRoomOptionSelected(opt)
+                    return (
+                      <label key={opt.room_type} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selected ? 'border-primary bg-primary/5' : 'hover:border-primary/50'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="room_option"
+                            checked={selected}
+                            onChange={() => selectRoomOption(opt)}
+                            className="text-primary"
+                          />
+                          <div>
+                            <p className="font-medium text-sm">{opt.room_type}</p>
+                            <p className="text-xs text-muted-foreground">{opt.beds_available} beds available</p>
+                          </div>
                         </div>
-                      </div>
-                      <p className="font-semibold text-primary">{formatCurrency(opt.rent_per_head)}/mo</p>
-                    </label>
-                  ))}
+                        <p className="font-semibold text-primary">{formatCurrency(opt.rent_per_head)}/mo</p>
+                      </label>
+                    )
+                  })}
                 </div>
                 {personalForm.formState.errors.preferred_room_type_id && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.preferred_room_type_id.message}</p>}
-              </div>
-              <div>
-                <Label>AC Preference</Label>
-                <div className="flex gap-3 mt-2">
-                  {(['any', 'yes', 'no'] as const).map((v) => (
-                    <label key={v} className={`flex-1 text-center p-2 border rounded-lg cursor-pointer text-sm ${
-                      personalForm.watch('preferred_ac') === v ? 'border-primary bg-primary/5 font-medium' : ''
-                    }`}>
-                      <input type="radio" {...personalForm.register('preferred_ac')} value={v} className="sr-only" />
-                      {v === 'any' ? 'No preference' : v === 'yes' ? 'AC' : 'Non-AC'}
-                    </label>
-                  ))}
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -331,7 +340,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="occupation">Occupation *</Label>
-                <select {...addressForm.register('occupation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="occupation" {...addressForm.register('occupation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select occupation</option>
                   <option value="Student">Student</option>
                   <option value="Working Professional">Working Professional</option>
@@ -346,7 +355,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="id_proof_type">ID Proof Type *</Label>
-                <select {...addressForm.register('id_proof_type')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="id_proof_type" {...addressForm.register('id_proof_type')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select ID type</option>
                   <option value="Aadhaar">Aadhaar Card</option>
                   <option value="PAN">PAN Card</option>
@@ -358,7 +367,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="id_proof_no">ID Proof Number *</Label>
-                <Input id="id_proof_no" {...addressForm.register('id_proof_no')} placeholder="Enter ID number" className="mt-1" />
+                <Input id="id_proof_no" inputMode={addressForm.watch('id_proof_type') === 'Aadhaar' ? 'numeric' : 'text'} autoCapitalize="characters" {...addressForm.register('id_proof_no')} placeholder="Enter ID number" className="mt-1" />
                 {addressForm.formState.errors.id_proof_no && <p className="text-xs text-destructive mt-1">{addressForm.formState.errors.id_proof_no.message}</p>}
               </div>
             </CardContent>
@@ -380,7 +389,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="emergency_relation">Relation *</Label>
-                <select {...emergencyForm.register('emergency_relation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="emergency_relation" {...emergencyForm.register('emergency_relation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select relation</option>
                   <option value="Father">Father</option>
                   <option value="Mother">Mother</option>
@@ -393,8 +402,13 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="emergency_phone">Contact Phone *</Label>
-                <Input id="emergency_phone" {...emergencyForm.register('emergency_phone')} placeholder="10-digit mobile number" className="mt-1" />
+                <Input id="emergency_phone" type="tel" inputMode="numeric" maxLength={10} {...emergencyForm.register('emergency_phone')} placeholder="10-digit mobile number" className="mt-1" />
                 {emergencyForm.formState.errors.emergency_phone && <p className="text-xs text-destructive mt-1">{emergencyForm.formState.errors.emergency_phone.message}</p>}
+                {samePhoneAcknowledged !== null && samePhoneAcknowledged === emergencyForm.watch('emergency_phone') && (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2" role="status">
+                    This is the same number as your own. Enter a parent's or guardian's number, or tap Next again to keep it.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -429,7 +443,14 @@ export function ApplyPage() {
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) setDocuments(prev => ({ ...prev, [key]: file }))
+                        if (!file) return
+                        // Photos are compressed before upload; other files (PDFs) must already fit.
+                        if (!file.type.startsWith('image/') && file.size > MAX_DOCUMENT_BYTES) {
+                          setStepError(`${label.replace(' *', '')} is larger than 5 MB. Please choose a smaller file or take a photo instead.`)
+                          return
+                        }
+                        setDocuments(prev => ({ ...prev, [key]: file }))
+                        setStepError('')
                       }}
                     />
                   </label>
@@ -454,6 +475,7 @@ export function ApplyPage() {
                   <p className="text-muted-foreground">DOB</p><p className="font-medium">{personalData.dob}</p>
                   <p className="text-muted-foreground">Phone</p><p className="font-medium">{personalData.phone}</p>
                   {personalData.email && <><p className="text-muted-foreground">Email</p><p className="font-medium">{personalData.email}</p></>}
+                  <p className="text-muted-foreground">Room</p><p className="font-medium">{chosenRoomLabel || '—'}</p>
                 </div>
                 <h4 className="font-semibold text-primary">Address & Occupation</h4>
                 <div className="grid grid-cols-2 gap-2 bg-muted/50 p-3 rounded-lg">
@@ -486,10 +508,17 @@ export function ApplyPage() {
           </Card>
         )}
 
+        {(stepError || submitError) && (
+          <div className="flex items-start gap-2 mt-6 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-sm text-destructive" role="alert">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>{submitError || stepError}</p>
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex justify-between mt-6">
           {step > 1 && (
-            <Button variant="outline" onClick={() => setStep(step - 1)}>
+            <Button variant="outline" onClick={() => { setStepError(''); setSubmitError(''); setStep(step - 1) }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           )}

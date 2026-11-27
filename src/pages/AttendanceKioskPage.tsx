@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import { useDemoData } from '@/contexts/DemoDataContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { checkStaffPassword } from '@/lib/authStore'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -12,6 +19,11 @@ import {
   ArrowLeft, Delete, CheckCircle2, Lock,
   Clock, ShieldAlert, Sparkles, Building2, UserCheck, ArrowDownRight, ArrowUpRight
 } from 'lucide-react'
+
+const exitSchema = z.object({
+  password: z.string().min(1, 'Enter the staff password'),
+})
+type ExitFormData = z.infer<typeof exitSchema>
 
 const OUT_REASONS = [
   'College / Classes',
@@ -24,7 +36,36 @@ const OUT_REASONS = [
 
 export function AttendanceKioskPage() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const { residents, recordAttendanceMovement, getResidentAttendanceStatus } = useDemoData()
+
+  // Leaving kiosk mode needs the signed-in staff member's password, so a resident
+  // at the tablet can't tap through into the staff app.
+  const [exitPromptOpen, setExitPromptOpen] = useState(false)
+  const exitForm = useForm<ExitFormData>({
+    resolver: zodResolver(exitSchema),
+    defaultValues: { password: '' },
+  })
+
+  const closeExitPrompt = () => {
+    setExitPromptOpen(false)
+    exitForm.reset()
+  }
+
+  const handleExitKiosk = (data: ExitFormData) => {
+    const result = profile ? checkStaffPassword(profile.user_id, data.password) : 'unavailable'
+    if (result === 'match') {
+      closeExitPrompt()
+      navigate('/attendance')
+      return
+    }
+    exitForm.reset({ password: '' })
+    exitForm.setError('password', {
+      message: result === 'mismatch'
+        ? 'Incorrect password. Ask a staff member to unlock the kiosk.'
+        : "This tablet can't check staff passwords yet. Ask the office to sign in again on this tablet.",
+    })
+  }
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [failedAttempts, setFailedAttempts] = useState(0)
@@ -134,7 +175,7 @@ export function AttendanceKioskPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/attendance')}
+          onClick={() => setExitPromptOpen(true)}
           className="text-neutral-400 hover:text-white"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -323,6 +364,39 @@ export function AttendanceKioskPage() {
             </DialogFooter>
           </div>
         )}
+      </Dialog>
+
+      {/* Staff unlock to leave kiosk mode */}
+      <Dialog open={exitPromptOpen} onClose={closeExitPrompt}>
+        <form onSubmit={exitForm.handleSubmit(handleExitKiosk)} className="space-y-4 p-2 text-neutral-900 dark:text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Lock className="h-5 w-5 text-primary" />
+              Staff unlock
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Enter the password for {profile?.name || 'the signed-in staff member'} to leave kiosk mode.
+          </p>
+          <div>
+            <Label htmlFor="kiosk-exit-password">Staff password</Label>
+            <Input
+              id="kiosk-exit-password"
+              type="password"
+              autoComplete="off"
+              {...exitForm.register('password')}
+              className="mt-1"
+              autoFocus
+            />
+            {exitForm.formState.errors.password && (
+              <p className="text-sm text-destructive mt-2" role="alert">{exitForm.formState.errors.password.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeExitPrompt}>Stay in kiosk</Button>
+            <Button type="submit">Unlock and exit</Button>
+          </DialogFooter>
+        </form>
       </Dialog>
     </div>
   )

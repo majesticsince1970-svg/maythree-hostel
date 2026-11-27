@@ -1,15 +1,19 @@
-import { useLocation, Link } from 'react-router-dom'
+import { useLocation, Link, Navigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
-import { CheckCircle2, Clock, Phone, Mail, MapPin, ArrowLeft, Printer } from 'lucide-react'
+import { CheckCircle2, Clock, Phone, Mail, MapPin, ArrowLeft, Printer, AlertTriangle } from 'lucide-react'
 
 export function ApplyDonePage() {
   const location = useLocation()
-  const refNo = location.state?.refNo || 'HST-2026-XXXX'
+  const refNo: string | undefined = location.state?.refNo
   const applicantName = location.state?.name || 'Applicant'
+  const documentsSaved = location.state?.documentsSaved !== false
+
+  // Only reachable after a saved submission; opened directly, there is nothing to confirm.
+  if (!refNo) return <Navigate to="/apply" replace />
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-background flex items-center justify-center p-4">
@@ -48,6 +52,18 @@ export function ApplyDonePage() {
               </p>
             </div>
           </div>
+
+          {!documentsSaved && (
+            <div className="p-3.5 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 rounded-xl flex items-start gap-2.5 text-left" role="alert">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-red-900 dark:text-red-300">Your documents didn't upload</p>
+                <p className="text-red-800/90 dark:text-red-400 mt-0.5">
+                  Your application is saved. Please bring your photo and ID proof when you visit, or call the office on {BRAND.contacts.phoneFormatted}.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Reference Number Box */}
           <div className="bg-primary/5 border rounded-xl p-4 space-y-1">
