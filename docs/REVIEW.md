@@ -12,7 +12,7 @@ be corrected, and phone ergonomics. The fixes in this pull request are listed fi
 | Problem | Fix |
 | --- | --- |
 | Dashboard stat icons rendered navy on navy and were invisible | Light tinted backgrounds per icon colour |
-| Inputs used 14px text, so iPhones zoomed into every field; phone fields opened the full keyboard | 16px inputs on phones; number pads for phone and Aadhaar fields; selects labelled |
+| Inputs used 14px text, so iPhones zoomed into every field; phone fields opened the full keyboard | 16px on phones for the shared input components, the apply form and login; number pads for phone and Aadhaar fields; selects labelled. Inputs that set their own smaller size (some staff dialogs) are unchanged |
 | Choosing the ₹13,000 AC twin room highlighted both twin cards and saved a non-AC request | Each card sets room type and AC together; the review step shows the chosen room |
 | The kiosk's Exit button went straight to the staff app | Exit needs the signed-in staff member's password |
 | A failed application still showed "submitted successfully" and a reference number | Success only after the save; inline error otherwise; safe retries; references no longer clash or carry a fixed year |
