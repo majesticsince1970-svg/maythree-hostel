@@ -24,6 +24,7 @@ import {
   syncAuthUsersFromSupabase
 } from '@/lib/authStore'
 import type { AttendanceMovement } from '@/types/database'
+import { generateApplicationRefNo, type ApplicationSubmission } from '@/lib/applicationRef'
 
 export interface VacateResidentParams {
   residentId: string
@@ -45,6 +46,51 @@ export interface VacateResidentParams {
 }
 
 const DEMO_MODE = false
+
+export interface AddApplicationResult {
+  application: Application
+  /** False when the application was saved but one or more documents were not. */
+  documentsSaved: boolean
+}
+
+interface PostgrestErrorLike {
+  code?: string
+  message?: string
+  details?: string
+}
+
+function isUniqueViolation(error: PostgrestErrorLike): boolean {
+  return error.code === '23505'
+}
+
+function isApplicationPrimaryKeyConflict(error: PostgrestErrorLike): boolean {
+  return Boolean(error.message?.includes('applications_pkey') || error.details?.includes('Key (id)'))
+}
+
+async function saveApplicationDocuments(applicationId: string, docs: NonNullable<Application['documents']>): Promise<boolean> {
+  try {
+    for (const doc of docs) {
+      const docUuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          })
+      await (supabase as any).from('documents').insert([{
+        id: docUuid,
+        application_id: applicationId,
+        kind: doc.kind,
+        storage_path: doc.storage_path,
+        verified: false
+      }]).catch((de: any) => console.warn('[PublicAdmission] Document insert warn:', de))
+    }
+    return true
+  } catch (err) {
+    console.warn('[PublicAdmission] Documents not saved:', err)
+    return false
+  }
+}
+
 const STORAGE_KEY = 'mythree_hostel_state_v10'
 
 // ── Clean Hostel Data: 169 beds, 0 occupied, 169 vacant, 0 active residents, structure strictly preserved ──
@@ -190,7 +236,10 @@ interface DemoDataContextType {
   publicRoomOptions: PublicRoomOption[]
   rentDueList: RentDueView[]
   // Application actions
-  addApplication: (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>) => Promise<Application>
+  addApplication: (
+    app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>,
+    submission: ApplicationSubmission
+  ) => Promise<AddApplicationResult>
   refreshApplications: () => Promise<void>
   updateApplicationStatus: (id: string, status: ApplicationStatus, note?: string) => void
   updateApplicationDetails: (id: string, details: Partial<Application>) => void
@@ -707,15 +756,14 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   }, [residents, payments, sales, rooms])
 
   // ── Application actions ──
-  const addApplication = useCallback(async (app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>): Promise<Application> => {
-    const appUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
-      ? crypto.randomUUID() 
-      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-          return v.toString(16);
-        })
-    const refNo = `HST-2026-${String(Math.floor(1000 + Math.random() * 9000))}`
-
+  // Public QR form submission. Resolves only once the application row is saved, so an
+  // applicant never sees a success page for an application staff will never receive.
+  // `submission` (id + reference) is created once per form session: retrying after a lost
+  // response re-sends the same id, and the database's primary key stops a duplicate.
+  const addApplication = useCallback(async (
+    app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>,
+    submission: ApplicationSubmission
+  ): Promise<AddApplicationResult> => {
     // Map room type ID to Supabase UUID if needed
     let supaRoomTypeId: string | null = null
     if (app.preferred_room_type_id) {
@@ -730,70 +778,71 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    const submittedAt = new Date().toISOString()
+    let refNo = submission.refNo
+    let documentsSaved = true
+
+    if (!DEMO_MODE) {
+      const row = {
+        id: submission.id,
+        full_name: app.full_name,
+        dob: app.dob,
+        phone: app.phone,
+        email: app.email || null,
+        permanent_address: app.permanent_address,
+        occupation: app.occupation,
+        institution_or_employer: app.institution_or_employer,
+        id_proof_type: app.id_proof_type,
+        id_proof_no: app.id_proof_no,
+        emergency_name: app.emergency_name,
+        emergency_relation: app.emergency_relation,
+        emergency_phone: app.emergency_phone,
+        preferred_room_type_id: supaRoomTypeId,
+        preferred_ac: app.preferred_ac || 'any',
+        status: 'submitted',
+        submitted_at: submittedAt
+      }
+
+      let saved = false
+      for (let attempt = 0; attempt < 3 && !saved; attempt++) {
+        const { error } = await (supabase as any).from('applications').insert([{ ...row, ref_no: refNo }])
+        if (!error) {
+          saved = true
+        } else if (isUniqueViolation(error) && isApplicationPrimaryKeyConflict(error)) {
+          // Same submission id already stored: an earlier attempt was saved but its response was lost.
+          saved = true
+        } else if (isUniqueViolation(error)) {
+          // Reference number already taken by another application: pick a new one and retry.
+          refNo = generateApplicationRefNo()
+        } else {
+          console.error('[PublicAdmission] Application not saved:', error)
+          throw new Error('APPLICATION_NOT_SAVED')
+        }
+      }
+      if (!saved) throw new Error('APPLICATION_NOT_SAVED')
+
+      if (app.documents && app.documents.length > 0) {
+        documentsSaved = await saveApplicationDocuments(submission.id, app.documents)
+      }
+    }
+
     const newApp: Application = {
       ...app,
-      id: appUuid,
+      id: submission.id,
       ref_no: refNo,
-      submitted_at: new Date().toISOString(),
+      submitted_at: submittedAt,
       status: 'submitted',
       reviewed_by: null,
       review_note: null,
       documents: app.documents || []
     }
-    setApplications(prev => [newApp, ...prev])
-
-    if (!DEMO_MODE) {
-      try {
-        const { error } = await (supabase as any).from('applications').insert([{
-          id: newApp.id,
-          ref_no: newApp.ref_no,
-          full_name: newApp.full_name,
-          dob: newApp.dob,
-          phone: newApp.phone,
-          email: newApp.email || null,
-          permanent_address: newApp.permanent_address,
-          occupation: newApp.occupation,
-          institution_or_employer: newApp.institution_or_employer,
-          id_proof_type: newApp.id_proof_type,
-          id_proof_no: newApp.id_proof_no,
-          emergency_name: newApp.emergency_name,
-          emergency_relation: newApp.emergency_relation,
-          emergency_phone: newApp.emergency_phone,
-          preferred_room_type_id: supaRoomTypeId,
-          preferred_ac: newApp.preferred_ac || 'any',
-          status: 'submitted',
-          submitted_at: newApp.submitted_at
-        }])
-        if (error) {
-          console.error('[PublicAdmission] Supabase submission error:', error)
-        } else {
-          console.log('[PublicAdmission] Application recorded in Supabase cloud database:', newApp.ref_no)
-        }
-
-        // Insert uploaded documents (photo, id_proof, certificate)
-        if (newApp.documents && newApp.documents.length > 0) {
-          for (const doc of newApp.documents) {
-            const docUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) 
-              ? crypto.randomUUID() 
-              : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                  const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                  return v.toString(16);
-                })
-            await (supabase as any).from('documents').insert([{
-              id: docUuid,
-              application_id: newApp.id,
-              kind: doc.kind,
-              storage_path: doc.storage_path,
-              verified: false
-            }]).catch((de: any) => console.warn('[PublicAdmission] Document insert warn:', de))
-          }
-        }
-      } catch (err) {
-        console.error('[PublicAdmission] Network/database exception during submission:', err)
-      }
+    // Staff devices receive the application from the database (realtime and polling).
+    // Only demo mode keeps it locally, so applicants' own phones don't store it.
+    if (DEMO_MODE) {
+      setApplications(prev => prev.some(a => a.id === newApp.id) ? prev : [newApp, ...prev])
     }
 
-    return newApp
+    return { application: newApp, documentsSaved }
   }, [])
 
   const refreshApplications = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,8 +11,9 @@ import { useDemoData } from '@/contexts/DemoDataContext'
 import { formatCurrency } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
+import { newApplicationSubmission } from '@/lib/applicationRef'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2, AlertTriangle } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 
 async function fileToDataUri(file: File): Promise<string> {
@@ -107,6 +108,12 @@ export function ApplyPage() {
   const [documents, setDocuments] = useState<{ photo?: File; id_proof?: File; certificate?: File }>({})
   const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Inline messages instead of alert()/confirm(), which freeze some in-app browsers.
+  const [stepError, setStepError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [samePhoneAcknowledged, setSamePhoneAcknowledged] = useState<string | null>(null)
+  // One id + reference per form session, so a retry can't create a duplicate application.
+  const submissionRef = useRef(newApplicationSubmission())
   const { publicRoomOptions, addApplication, roomTypes } = useDemoData()
   const navigate = useNavigate()
 
@@ -154,11 +161,10 @@ export function ApplyPage() {
       const valid = await emergencyForm.trigger()
       if (valid) {
         const emValues = emergencyForm.getValues()
-        // L7: Warn if emergency phone equals applicant phone
-        if (personalData && emValues.emergency_phone === personalData.phone) {
-          if (!window.confirm('Warning: Emergency contact phone number is identical to the applicant mobile number. Are you sure you want to proceed with this?')) {
-            return
-          }
+        // L7: Warn if emergency phone equals applicant phone; a second tap on Next continues
+        if (personalData && emValues.emergency_phone === personalData.phone && samePhoneAcknowledged !== emValues.emergency_phone) {
+          setSamePhoneAcknowledged(emValues.emergency_phone)
+          return
         }
         setEmergencyData(emValues)
         setStep(4)
@@ -170,9 +176,10 @@ export function ApplyPage() {
       if (!documents.id_proof) missingUploads.push('ID Proof Document')
       
       if (missingUploads.length > 0) {
-        alert(`Please upload the following required documents before proceeding:\n• ${missingUploads.join('\n• ')}`)
+        setStepError(`Please upload: ${missingUploads.join(', ')}.`)
         return
       }
+      setStepError('')
       setStep(5)
     }
   }
@@ -180,6 +187,7 @@ export function ApplyPage() {
   const handleSubmit = async () => {
     if (!personalData || !addressData || !emergencyData || !agreed) return
     setSubmitting(true)
+    setSubmitError('')
     try {
       const docPayloads: Array<{ kind: 'photo' | 'id_proof' | 'certificate' | 'other'; storage_path: string; verified: boolean }> = []
 
@@ -196,7 +204,7 @@ export function ApplyPage() {
         docPayloads.push({ kind: 'certificate', storage_path: certUri, verified: false })
       }
 
-      const app = await addApplication({
+      const { application, documentsSaved } = await addApplication({
         full_name: personalData.full_name,
         dob: personalData.dob,
         phone: personalData.phone,
@@ -213,18 +221,20 @@ export function ApplyPage() {
         preferred_ac: personalData.preferred_ac,
         documents: docPayloads as any,
         preferred_room_type: roomTypes.find(rt => rt.id === personalData.preferred_room_type_id),
-      })
+      }, submissionRef.current)
+      submissionRef.current = { ...submissionRef.current, refNo: application.ref_no }
       navigate('/apply/done', {
         state: {
-          refNo: app.ref_no,
+          refNo: application.ref_no,
           name: personalData.full_name,
           phone: personalData.phone,
-          status: 'submitted'
+          status: 'submitted',
+          documentsSaved
         }
       })
     } catch (err) {
       console.error('[PublicAdmission] Form submission failed:', err)
-      alert('Something went wrong submitting your application. Please check your connection and try again.')
+      setSubmitError(`Your application was not sent. Check your internet connection and tap Submit again. If it keeps failing, call the hostel office on ${BRAND.contacts.phoneFormatted}.`)
     } finally {
       setSubmitting(false)
     }
@@ -407,6 +417,11 @@ export function ApplyPage() {
                 <Label htmlFor="emergency_phone">Contact Phone *</Label>
                 <Input id="emergency_phone" type="tel" inputMode="numeric" maxLength={10} {...emergencyForm.register('emergency_phone')} placeholder="10-digit mobile number" className="mt-1" />
                 {emergencyForm.formState.errors.emergency_phone && <p className="text-xs text-destructive mt-1">{emergencyForm.formState.errors.emergency_phone.message}</p>}
+                {samePhoneAcknowledged !== null && samePhoneAcknowledged === emergencyForm.watch('emergency_phone') && (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2" role="status">
+                    This is the same number as your own. Enter a parent's or guardian's number, or tap Next again to keep it.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -441,7 +456,10 @@ export function ApplyPage() {
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) setDocuments(prev => ({ ...prev, [key]: file }))
+                        if (file) {
+                          setDocuments(prev => ({ ...prev, [key]: file }))
+                          setStepError('')
+                        }
                       }}
                     />
                   </label>
@@ -499,10 +517,17 @@ export function ApplyPage() {
           </Card>
         )}
 
+        {(stepError || submitError) && (
+          <div className="flex items-start gap-2 mt-6 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-sm text-destructive" role="alert">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>{submitError || stepError}</p>
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex justify-between mt-6">
           {step > 1 && (
-            <Button variant="outline" onClick={() => setStep(step - 1)}>
+            <Button variant="outline" onClick={() => { setStepError(''); setSubmitError(''); setStep(step - 1) }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
           )}
