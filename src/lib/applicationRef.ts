@@ -11,7 +11,7 @@ function randomUint32(): number {
 }
 
 /** RFC 4122 v4 UUID; falls back to getRandomValues where randomUUID is unavailable (plain-http LAN testing). */
-function randomUuid(): string {
+export function randomUuid(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)

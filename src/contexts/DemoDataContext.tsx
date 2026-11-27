@@ -25,7 +25,7 @@ import {
   syncAuthUsersFromSupabase
 } from '@/lib/authStore'
 import type { AttendanceMovement } from '@/types/database'
-import { generateApplicationRefNo, type ApplicationSubmission } from '@/lib/applicationRef'
+import { generateApplicationRefNo, randomUuid, type ApplicationSubmission } from '@/lib/applicationRef'
 import { APPLICATION_DOCUMENTS_BUCKET, applicationDocumentPath, type ApplicationUpload } from '@/lib/applicationDocuments'
 
 export interface VacateResidentParams {
@@ -86,7 +86,7 @@ function isAlreadyUploaded(error: { message?: string; status?: number; statusCod
  * Runs after the application row is saved, so a failure here keeps the application.
  */
 async function saveApplicationDocuments(applicationId: string, uploads: ApplicationUpload[]): Promise<ApplicationDocument[] | null> {
-  const rows: Omit<ApplicationDocument, 'id'>[] = []
+  const rows: ApplicationDocument[] = []
   for (const upload of uploads) {
     const path = applicationDocumentPath(applicationId, upload)
     const { error } = await supabase.storage
@@ -96,14 +96,15 @@ async function saveApplicationDocuments(applicationId: string, uploads: Applicat
       console.warn('[PublicAdmission] Document upload failed:', error.message)
       return null
     }
-    rows.push({ application_id: applicationId, kind: upload.kind, storage_path: path, verified: false })
+    rows.push({ id: randomUuid(), application_id: applicationId, kind: upload.kind, storage_path: path, verified: false })
   }
-  const { data, error } = await (supabase as any).from('documents').insert(rows).select()
+  // No .select(): the public form may insert documents but not read them back.
+  const { error } = await (supabase as any).from('documents').insert(rows)
   if (error) {
     console.warn('[PublicAdmission] Document records not saved:', error.message)
     return null
   }
-  return (data as ApplicationDocument[] | null) ?? rows.map((row, i) => ({ ...row, id: `pending-${i}` }))
+  return rows
 }
 
 const STORAGE_KEY = 'mythree_hostel_state_v10'
