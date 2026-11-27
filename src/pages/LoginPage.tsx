@@ -178,7 +178,7 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter username or email"
-                className="mt-1 text-xs h-9"
+                className="mt-1 h-10 text-base md:text-sm"
                 autoComplete="username"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -221,7 +221,7 @@ export function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your confidential password"
-                  className="text-xs h-9 pr-10"
+                  className="h-10 pr-10 text-base md:text-sm"
                   autoComplete="current-password"
                   disabled={loading || isLockedOut}
                   required

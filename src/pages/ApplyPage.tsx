@@ -256,7 +256,7 @@ export function ApplyPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="full_name">Full Name *</Label>
-                <Input id="full_name" {...personalForm.register('full_name')} placeholder="Enter your full name" className="mt-1" />
+                <Input id="full_name" autoComplete="name" {...personalForm.register('full_name')} placeholder="Enter your full name" className="mt-1" />
                 {personalForm.formState.errors.full_name && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.full_name.message}</p>}
               </div>
               <div>
@@ -266,12 +266,12 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="phone">Mobile Number *</Label>
-                <Input id="phone" {...personalForm.register('phone')} placeholder="10-digit mobile number" className="mt-1" />
+                <Input id="phone" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} {...personalForm.register('phone')} placeholder="10-digit mobile number" className="mt-1" />
                 {personalForm.formState.errors.phone && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.phone.message}</p>}
               </div>
               <div>
                 <Label htmlFor="email">Email (optional)</Label>
-                <Input id="email" type="email" {...personalForm.register('email')} placeholder="your@email.com" className="mt-1" />
+                <Input id="email" type="email" autoComplete="email" {...personalForm.register('email')} placeholder="your@email.com" className="mt-1" />
                 {personalForm.formState.errors.email && <p className="text-xs text-destructive mt-1">{personalForm.formState.errors.email.message}</p>}
               </div>
               <div>
@@ -331,7 +331,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="occupation">Occupation *</Label>
-                <select {...addressForm.register('occupation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="occupation" {...addressForm.register('occupation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select occupation</option>
                   <option value="Student">Student</option>
                   <option value="Working Professional">Working Professional</option>
@@ -346,7 +346,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="id_proof_type">ID Proof Type *</Label>
-                <select {...addressForm.register('id_proof_type')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="id_proof_type" {...addressForm.register('id_proof_type')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select ID type</option>
                   <option value="Aadhaar">Aadhaar Card</option>
                   <option value="PAN">PAN Card</option>
@@ -358,7 +358,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="id_proof_no">ID Proof Number *</Label>
-                <Input id="id_proof_no" {...addressForm.register('id_proof_no')} placeholder="Enter ID number" className="mt-1" />
+                <Input id="id_proof_no" inputMode={addressForm.watch('id_proof_type') === 'Aadhaar' ? 'numeric' : 'text'} autoCapitalize="characters" {...addressForm.register('id_proof_no')} placeholder="Enter ID number" className="mt-1" />
                 {addressForm.formState.errors.id_proof_no && <p className="text-xs text-destructive mt-1">{addressForm.formState.errors.id_proof_no.message}</p>}
               </div>
             </CardContent>
@@ -380,7 +380,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="emergency_relation">Relation *</Label>
-                <select {...emergencyForm.register('emergency_relation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <select id="emergency_relation" {...emergencyForm.register('emergency_relation')} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm mt-1">
                   <option value="">Select relation</option>
                   <option value="Father">Father</option>
                   <option value="Mother">Mother</option>
@@ -393,7 +393,7 @@ export function ApplyPage() {
               </div>
               <div>
                 <Label htmlFor="emergency_phone">Contact Phone *</Label>
-                <Input id="emergency_phone" {...emergencyForm.register('emergency_phone')} placeholder="10-digit mobile number" className="mt-1" />
+                <Input id="emergency_phone" type="tel" inputMode="numeric" maxLength={10} {...emergencyForm.register('emergency_phone')} placeholder="10-digit mobile number" className="mt-1" />
                 {emergencyForm.formState.errors.emergency_phone && <p className="text-xs text-destructive mt-1">{emergencyForm.formState.errors.emergency_phone.message}</p>}
               </div>
             </CardContent>
