@@ -12,29 +12,27 @@ import { formatCurrency } from '@/lib/utils'
 import { BRAND } from '@/lib/brandConfig'
 import { MythreeLogo } from '@/components/MythreeLogo'
 import { newApplicationSubmission } from '@/lib/applicationRef'
+import { fileExtension, MAX_DOCUMENT_BYTES, type ApplicationUpload } from '@/lib/applicationDocuments'
+import type { DocumentKind } from '@/types/database'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Upload, CheckCircle, Building2, Loader2, AlertTriangle } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 
-async function fileToDataUri(file: File): Promise<string> {
-  let fileToRead = file
+/** Compresses photos (to keep uploads small on mobile data) and prepares a file for upload. */
+async function prepareUpload(kind: DocumentKind, file: File): Promise<ApplicationUpload> {
+  let fileToUpload: Blob = file
   if (file.type.startsWith('image/')) {
     try {
-      fileToRead = await imageCompression(file, {
+      fileToUpload = await imageCompression(file, {
         maxSizeMB: 0.15,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
       })
     } catch {
-      fileToRead = file
+      fileToUpload = file
     }
   }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(fileToRead)
-  })
+  return { kind, file: fileToUpload, extension: fileExtension(fileToUpload, file.name) }
 }
 
 const personalSchema = z.object({
@@ -189,20 +187,10 @@ export function ApplyPage() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      const docPayloads: Array<{ kind: 'photo' | 'id_proof' | 'certificate' | 'other'; storage_path: string; verified: boolean }> = []
-
-      if (documents.photo) {
-        const photoUri = await fileToDataUri(documents.photo)
-        docPayloads.push({ kind: 'photo', storage_path: photoUri, verified: false })
-      }
-      if (documents.id_proof) {
-        const idUri = await fileToDataUri(documents.id_proof)
-        docPayloads.push({ kind: 'id_proof', storage_path: idUri, verified: false })
-      }
-      if (documents.certificate) {
-        const certUri = await fileToDataUri(documents.certificate)
-        docPayloads.push({ kind: 'certificate', storage_path: certUri, verified: false })
-      }
+      const uploads: ApplicationUpload[] = []
+      if (documents.photo) uploads.push(await prepareUpload('photo', documents.photo))
+      if (documents.id_proof) uploads.push(await prepareUpload('id_proof', documents.id_proof))
+      if (documents.certificate) uploads.push(await prepareUpload('certificate', documents.certificate))
 
       const { application, documentsSaved } = await addApplication({
         full_name: personalData.full_name,
@@ -219,9 +207,8 @@ export function ApplyPage() {
         emergency_phone: emergencyData.emergency_phone,
         preferred_room_type_id: personalData.preferred_room_type_id,
         preferred_ac: personalData.preferred_ac,
-        documents: docPayloads as any,
         preferred_room_type: roomTypes.find(rt => rt.id === personalData.preferred_room_type_id),
-      }, submissionRef.current)
+      }, submissionRef.current, uploads)
       submissionRef.current = { ...submissionRef.current, refNo: application.ref_no }
       navigate('/apply/done', {
         state: {
@@ -456,10 +443,14 @@ export function ApplyPage() {
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (file) {
-                          setDocuments(prev => ({ ...prev, [key]: file }))
-                          setStepError('')
+                        if (!file) return
+                        // Photos are compressed before upload; other files (PDFs) must already fit.
+                        if (!file.type.startsWith('image/') && file.size > MAX_DOCUMENT_BYTES) {
+                          setStepError(`${label.replace(' *', '')} is larger than 5 MB. Please choose a smaller file or take a photo instead.`)
+                          return
                         }
+                        setDocuments(prev => ({ ...prev, [key]: file }))
+                        setStepError('')
                       }}
                     />
                   </label>

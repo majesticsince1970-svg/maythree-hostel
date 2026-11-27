@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useDemoData } from '@/contexts/DemoDataContext'
+import { ApplicationDocumentPreview } from '@/components/ApplicationDocumentPreview'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,8 @@ export function ApplicationsPage() {
 
   // Dialogs
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
+  const photoDoc = selectedApp?.documents?.find(d => d.kind === 'photo')
+  const idProofDoc = selectedApp?.documents?.find(d => d.kind === 'id_proof')
   const [editApp, setEditApp] = useState<Application | null>(null)
   const [rejectDialog, setRejectDialog] = useState(false)
   const [rejectNote, setRejectNote] = useState('')
@@ -595,42 +598,40 @@ export function ApplicationsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Photo */}
                   <div className="p-3 rounded-lg border bg-background text-center space-y-2">
-                    {selectedApp.documents?.find(d => d.kind === 'photo')?.storage_path ? (
-                      <img
-                        src={selectedApp.documents.find(d => d.kind === 'photo')!.storage_path}
-                        alt="Applicant Photo"
-                        className="h-24 w-24 mx-auto rounded-full object-cover border-2 border-primary/20 shadow-sm"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center font-bold text-lg text-primary">
-                        {selectedApp.full_name.charAt(0)}
-                      </div>
-                    )}
+                    <ApplicationDocumentPreview
+                      path={photoDoc?.storage_path}
+                      alt="Applicant photo"
+                      imageClassName="h-24 w-24 mx-auto rounded-full object-cover border-2 border-primary/20 shadow-sm"
+                      fallback={
+                        <div className="h-16 w-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center font-bold text-lg text-primary">
+                          {selectedApp.full_name.charAt(0)}
+                        </div>
+                      }
+                    />
                     <div>
                       <span className="block font-semibold text-xs">Applicant Photo</span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 mt-0.5">
-                        {selectedApp.documents?.some(d => d.kind === 'photo') ? 'Photo Uploaded' : 'Photo Attached'}
+                      <Badge variant="outline" className={`text-[10px] mt-0.5 ${photoDoc ? 'text-emerald-600 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
+                        {photoDoc ? 'Photo uploaded' : 'No photo uploaded'}
                       </Badge>
                     </div>
                   </div>
 
                   {/* ID Proof */}
                   <div className="p-3 rounded-lg border bg-background text-center space-y-2">
-                    {selectedApp.documents?.find(d => d.kind === 'id_proof')?.storage_path?.startsWith('data:image') ? (
-                      <img
-                        src={selectedApp.documents.find(d => d.kind === 'id_proof')!.storage_path}
-                        alt="ID Proof"
-                        className="h-24 w-full max-w-[180px] mx-auto rounded object-contain border bg-muted/20 p-1"
-                      />
-                    ) : (
-                      <div className="h-16 w-16 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-mono text-xs font-bold border border-blue-100">
-                        {selectedApp.id_proof_type}
-                      </div>
-                    )}
+                    <ApplicationDocumentPreview
+                      path={idProofDoc?.storage_path}
+                      alt="ID proof"
+                      imageClassName="h-24 w-full max-w-[180px] mx-auto rounded object-contain border bg-muted/20 p-1"
+                      fallback={
+                        <div className="h-16 w-16 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-mono text-xs font-bold border border-blue-100">
+                          {selectedApp.id_proof_type}
+                        </div>
+                      }
+                    />
                     <div>
                       <span className="block font-semibold text-xs">{selectedApp.id_proof_type} ({selectedApp.id_proof_no})</span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 mt-0.5">
-                        {selectedApp.documents?.some(d => d.kind === 'id_proof') ? 'ID Proof Uploaded' : 'Verified ID'}
+                      <Badge variant="outline" className={`text-[10px] mt-0.5 ${idProofDoc ? 'text-emerald-600 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
+                        {idProofDoc ? 'ID proof uploaded' : 'No ID proof uploaded'}
                       </Badge>
                     </div>
                   </div>

@@ -8,7 +8,8 @@ import type {
   DashboardStats, RentDueView, PublicRoomOption,
   ApplicationStatus, BedStatus, StaffProfile, StockMovementType, SalePaymentMode,
   VacatedResident, SettlementType, CashDirection, PaymentMode,
-  RentBreakdownItem, DeductionItem, CheckoutReceipt
+  RentBreakdownItem, DeductionItem, CheckoutReceipt,
+  Document as ApplicationDocument
 } from '@/types/database'
 
 import {
@@ -25,6 +26,7 @@ import {
 } from '@/lib/authStore'
 import type { AttendanceMovement } from '@/types/database'
 import { generateApplicationRefNo, type ApplicationSubmission } from '@/lib/applicationRef'
+import { APPLICATION_DOCUMENTS_BUCKET, applicationDocumentPath, type ApplicationUpload } from '@/lib/applicationDocuments'
 
 export interface VacateResidentParams {
   residentId: string
@@ -53,6 +55,13 @@ export interface AddApplicationResult {
   documentsSaved: boolean
 }
 
+interface StorageErrorLike {
+  message?: string
+  status?: number
+  statusCode?: string
+  code?: string
+}
+
 interface PostgrestErrorLike {
   code?: string
   message?: string
@@ -67,28 +76,34 @@ function isApplicationPrimaryKeyConflict(error: PostgrestErrorLike): boolean {
   return Boolean(error.message?.includes('applications_pkey') || error.details?.includes('Key (id)'))
 }
 
-async function saveApplicationDocuments(applicationId: string, docs: NonNullable<Application['documents']>): Promise<boolean> {
-  try {
-    for (const doc of docs) {
-      const docUuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-          })
-      await (supabase as any).from('documents').insert([{
-        id: docUuid,
-        application_id: applicationId,
-        kind: doc.kind,
-        storage_path: doc.storage_path,
-        verified: false
-      }]).catch((de: any) => console.warn('[PublicAdmission] Document insert warn:', de))
+function isAlreadyUploaded(error: { message?: string; status?: number; statusCode?: string; code?: string }): boolean {
+  return error.code === 'ResourceAlreadyExists' || error.code === 'Duplicate' ||
+    error.status === 409 || error.statusCode === '409' || Boolean(error.message?.includes('already exists'))
+}
+
+/**
+ * Uploads the form's files to the private Storage bucket, then records their paths.
+ * Runs after the application row is saved, so a failure here keeps the application.
+ */
+async function saveApplicationDocuments(applicationId: string, uploads: ApplicationUpload[]): Promise<ApplicationDocument[] | null> {
+  const rows: Omit<ApplicationDocument, 'id'>[] = []
+  for (const upload of uploads) {
+    const path = applicationDocumentPath(applicationId, upload)
+    const { error } = await supabase.storage
+      .from(APPLICATION_DOCUMENTS_BUCKET)
+      .upload(path, upload.file, { upsert: false, contentType: upload.file.type || undefined })
+    if (error && !isAlreadyUploaded(error as StorageErrorLike)) {
+      console.warn('[PublicAdmission] Document upload failed:', error.message)
+      return null
     }
-    return true
-  } catch (err) {
-    console.warn('[PublicAdmission] Documents not saved:', err)
-    return false
+    rows.push({ application_id: applicationId, kind: upload.kind, storage_path: path, verified: false })
   }
+  const { data, error } = await (supabase as any).from('documents').insert(rows).select()
+  if (error) {
+    console.warn('[PublicAdmission] Document records not saved:', error.message)
+    return null
+  }
+  return (data as ApplicationDocument[] | null) ?? rows.map((row, i) => ({ ...row, id: `pending-${i}` }))
 }
 
 const STORAGE_KEY = 'mythree_hostel_state_v10'
@@ -238,7 +253,8 @@ interface DemoDataContextType {
   // Application actions
   addApplication: (
     app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>,
-    submission: ApplicationSubmission
+    submission: ApplicationSubmission,
+    uploads: ApplicationUpload[]
   ) => Promise<AddApplicationResult>
   refreshApplications: () => Promise<void>
   updateApplicationStatus: (id: string, status: ApplicationStatus, note?: string) => void
@@ -762,7 +778,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   // response re-sends the same id, and the database's primary key stops a duplicate.
   const addApplication = useCallback(async (
     app: Omit<Application, 'id' | 'ref_no' | 'submitted_at' | 'status' | 'reviewed_by' | 'review_note'>,
-    submission: ApplicationSubmission
+    submission: ApplicationSubmission,
+    uploads: ApplicationUpload[]
   ): Promise<AddApplicationResult> => {
     // Map room type ID to Supabase UUID if needed
     let supaRoomTypeId: string | null = null
@@ -781,6 +798,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     const submittedAt = new Date().toISOString()
     let refNo = submission.refNo
     let documentsSaved = true
+    let savedDocuments: ApplicationDocument[] = []
 
     if (!DEMO_MODE) {
       const row = {
@@ -821,8 +839,10 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       }
       if (!saved) throw new Error('APPLICATION_NOT_SAVED')
 
-      if (app.documents && app.documents.length > 0) {
-        documentsSaved = await saveApplicationDocuments(submission.id, app.documents)
+      if (uploads.length > 0) {
+        const documents = await saveApplicationDocuments(submission.id, uploads)
+        documentsSaved = documents !== null
+        savedDocuments = documents ?? []
       }
     }
 
@@ -834,7 +854,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
       status: 'submitted',
       reviewed_by: null,
       review_note: null,
-      documents: app.documents || []
+      documents: savedDocuments
     }
     // Staff devices receive the application from the database (realtime and polling).
     // Only demo mode keeps it locally, so applicants' own phones don't store it.
