@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDemoData } from '@/contexts/DemoDataContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { verifyStaffPassword } from '@/lib/authStore'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -24,7 +28,31 @@ const OUT_REASONS = [
 
 export function AttendanceKioskPage() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const { residents, recordAttendanceMovement, getResidentAttendanceStatus } = useDemoData()
+
+  // Leaving kiosk mode needs the signed-in staff member's password, so a resident
+  // at the tablet can't tap through into the staff app.
+  const [exitPromptOpen, setExitPromptOpen] = useState(false)
+  const [exitPassword, setExitPassword] = useState('')
+  const [exitError, setExitError] = useState('')
+
+  const closeExitPrompt = () => {
+    setExitPromptOpen(false)
+    setExitPassword('')
+    setExitError('')
+  }
+
+  const handleExitKiosk = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (profile && verifyStaffPassword(profile.user_id, exitPassword)) {
+      closeExitPrompt()
+      navigate('/attendance')
+      return
+    }
+    setExitPassword('')
+    setExitError('Incorrect password. Ask a staff member to unlock the kiosk.')
+  }
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [failedAttempts, setFailedAttempts] = useState(0)
@@ -134,7 +162,7 @@ export function AttendanceKioskPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/attendance')}
+          onClick={() => setExitPromptOpen(true)}
           className="text-neutral-400 hover:text-white"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -323,6 +351,38 @@ export function AttendanceKioskPage() {
             </DialogFooter>
           </div>
         )}
+      </Dialog>
+
+      {/* Staff unlock to leave kiosk mode */}
+      <Dialog open={exitPromptOpen} onClose={closeExitPrompt}>
+        <form onSubmit={handleExitKiosk} className="space-y-4 p-2 text-neutral-900 dark:text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Lock className="h-5 w-5 text-primary" />
+              Staff unlock
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Enter the password for {profile?.name || 'the signed-in staff member'} to leave kiosk mode.
+          </p>
+          <div>
+            <Label htmlFor="kiosk-exit-password">Staff password</Label>
+            <Input
+              id="kiosk-exit-password"
+              type="password"
+              autoComplete="off"
+              value={exitPassword}
+              onChange={(e) => { setExitPassword(e.target.value); setExitError('') }}
+              className="mt-1"
+              autoFocus
+            />
+            {exitError && <p className="text-sm text-destructive mt-2" role="alert">{exitError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeExitPrompt}>Stay in kiosk</Button>
+            <Button type="submit" disabled={!exitPassword}>Unlock and exit</Button>
+          </DialogFooter>
+        </form>
       </Dialog>
     </div>
   )

@@ -123,6 +123,17 @@ export function findAuthUserByIdentifier(identifier: string): StaffProfile | nul
 }
 
 /**
+ * Read-only check of a staff member's password, used to confirm a staff
+ * member is present (e.g. before leaving kiosk mode). Never writes, never
+ * adopts a password, and fails when this device has no password on record.
+ */
+export function verifyStaffPassword(userId: string, password: string): boolean {
+  const user = getStoredAuthUsers().find(u => u.user_id === userId)
+  if (!user?.password || !password) return false
+  return user.password === password
+}
+
+/**
  * Live Supabase query for cross-device authentication:
  * If a user doesn't exist in local browser cache, queries the shared Supabase cloud database.
  */
