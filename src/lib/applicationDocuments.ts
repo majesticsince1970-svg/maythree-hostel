@@ -44,14 +44,12 @@ export function isPdfDocument(path: string): boolean {
   return path.startsWith('data:application/pdf') || path.toLowerCase().endsWith('.pdf')
 }
 
-const SIGNED_URL_SECONDS = 60 * 60
-const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
+/** Lifetime of a signed document link; callers cache the link for less than this. */
+export const SIGNED_URL_SECONDS = 60 * 60
 
-/** A viewable URL for a stored document; signed URLs are cached until shortly before they expire. */
+/** A viewable URL for a stored document (a signed link for Storage paths). */
 export async function getDocumentUrl(path: string): Promise<string | null> {
   if (isInlineDocument(path)) return path
-  const cached = signedUrlCache.get(path)
-  if (cached && cached.expiresAt > Date.now()) return cached.url
   const { data, error } = await supabase.storage
     .from(APPLICATION_DOCUMENTS_BUCKET)
     .createSignedUrl(path, SIGNED_URL_SECONDS)
@@ -59,6 +57,5 @@ export async function getDocumentUrl(path: string): Promise<string | null> {
     console.warn('[Documents] Could not load document:', error?.message)
     return null
   }
-  signedUrlCache.set(path, { url: data.signedUrl, expiresAt: Date.now() + (SIGNED_URL_SECONDS - 60) * 1000 })
   return data.signedUrl
 }

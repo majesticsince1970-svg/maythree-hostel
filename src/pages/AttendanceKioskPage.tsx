@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import { useDemoData } from '@/contexts/DemoDataContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { verifyStaffPassword } from '@/lib/authStore'
+import { checkStaffPassword } from '@/lib/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +19,11 @@ import {
   ArrowLeft, Delete, CheckCircle2, Lock,
   Clock, ShieldAlert, Sparkles, Building2, UserCheck, ArrowDownRight, ArrowUpRight
 } from 'lucide-react'
+
+const exitSchema = z.object({
+  password: z.string().min(1, 'Enter the staff password'),
+})
+type ExitFormData = z.infer<typeof exitSchema>
 
 const OUT_REASONS = [
   'College / Classes',
@@ -34,24 +42,29 @@ export function AttendanceKioskPage() {
   // Leaving kiosk mode needs the signed-in staff member's password, so a resident
   // at the tablet can't tap through into the staff app.
   const [exitPromptOpen, setExitPromptOpen] = useState(false)
-  const [exitPassword, setExitPassword] = useState('')
-  const [exitError, setExitError] = useState('')
+  const exitForm = useForm<ExitFormData>({
+    resolver: zodResolver(exitSchema),
+    defaultValues: { password: '' },
+  })
 
   const closeExitPrompt = () => {
     setExitPromptOpen(false)
-    setExitPassword('')
-    setExitError('')
+    exitForm.reset()
   }
 
-  const handleExitKiosk = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (profile && verifyStaffPassword(profile.user_id, exitPassword)) {
+  const handleExitKiosk = (data: ExitFormData) => {
+    const result = profile ? checkStaffPassword(profile.user_id, data.password) : 'unavailable'
+    if (result === 'match') {
       closeExitPrompt()
       navigate('/attendance')
       return
     }
-    setExitPassword('')
-    setExitError('Incorrect password. Ask a staff member to unlock the kiosk.')
+    exitForm.reset({ password: '' })
+    exitForm.setError('password', {
+      message: result === 'mismatch'
+        ? 'Incorrect password. Ask a staff member to unlock the kiosk.'
+        : "This tablet can't check staff passwords yet. Ask the office to sign in again on this tablet.",
+    })
   }
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -355,7 +368,7 @@ export function AttendanceKioskPage() {
 
       {/* Staff unlock to leave kiosk mode */}
       <Dialog open={exitPromptOpen} onClose={closeExitPrompt}>
-        <form onSubmit={handleExitKiosk} className="space-y-4 p-2 text-neutral-900 dark:text-white">
+        <form onSubmit={exitForm.handleSubmit(handleExitKiosk)} className="space-y-4 p-2 text-neutral-900 dark:text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Lock className="h-5 w-5 text-primary" />
@@ -371,16 +384,17 @@ export function AttendanceKioskPage() {
               id="kiosk-exit-password"
               type="password"
               autoComplete="off"
-              value={exitPassword}
-              onChange={(e) => { setExitPassword(e.target.value); setExitError('') }}
+              {...exitForm.register('password')}
               className="mt-1"
               autoFocus
             />
-            {exitError && <p className="text-sm text-destructive mt-2" role="alert">{exitError}</p>}
+            {exitForm.formState.errors.password && (
+              <p className="text-sm text-destructive mt-2" role="alert">{exitForm.formState.errors.password.message}</p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={closeExitPrompt}>Stay in kiosk</Button>
-            <Button type="submit" disabled={!exitPassword}>Unlock and exit</Button>
+            <Button type="submit">Unlock and exit</Button>
           </DialogFooter>
         </form>
       </Dialog>

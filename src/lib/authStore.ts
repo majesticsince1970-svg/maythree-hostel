@@ -122,15 +122,17 @@ export function findAuthUserByIdentifier(identifier: string): StaffProfile | nul
   }) || null
 }
 
+export type StaffPasswordCheck = 'match' | 'mismatch' | 'unavailable'
+
 /**
  * Read-only check of a staff member's password, used to confirm a staff
  * member is present (e.g. before leaving kiosk mode). Never writes, never
- * adopts a password, and fails when this device has no password on record.
+ * adopts a password; 'unavailable' when this device has no password on record.
  */
-export function verifyStaffPassword(userId: string, password: string): boolean {
+export function checkStaffPassword(userId: string, password: string): StaffPasswordCheck {
   const user = getStoredAuthUsers().find(u => u.user_id === userId)
-  if (!user?.password || !password) return false
-  return user.password === password
+  if (!user?.password) return 'unavailable'
+  return user.password === password ? 'match' : 'mismatch'
 }
 
 /**

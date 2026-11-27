@@ -1,32 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { FileText, Loader2 } from 'lucide-react'
-import { getDocumentUrl, isPdfDocument } from '@/lib/applicationDocuments'
+import { getDocumentUrl, isPdfDocument, SIGNED_URL_SECONDS } from '@/lib/applicationDocuments'
 
 /**
  * Resolves a document's storage path to a viewable URL. Keyed on the path string, so the
- * applications list being replaced by polling doesn't refetch it.
+ * applications list being replaced by polling doesn't refetch it; refreshed before the
+ * signed link expires.
  */
 function useDocumentUrl(path: string | undefined) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!path) {
-      setUrl(null)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    getDocumentUrl(path).then(resolved => {
-      if (!cancelled) {
-        setUrl(resolved)
-        setLoading(false)
-      }
-    })
-    return () => { cancelled = true }
-  }, [path])
-
-  return { url, loading }
+  const { data, isLoading } = useQuery({
+    queryKey: ['application-document-url', path],
+    queryFn: () => getDocumentUrl(path as string),
+    enabled: Boolean(path),
+    staleTime: (SIGNED_URL_SECONDS - 10 * 60) * 1000,
+    gcTime: (SIGNED_URL_SECONDS - 5 * 60) * 1000,
+  })
+  return { url: data ?? null, loading: Boolean(path) && isLoading }
 }
 
 interface ApplicationDocumentPreviewProps {
